@@ -3,7 +3,6 @@ import express from "express";
 import clientesRoute from "../src/routes/clientes.route.js";
 import pedidosRoute from "../src/routes/pedidos.route.js";
 import notasRoute from "../src/routes/notas.route.js";
-import contatosRoute from "../src/routes/contatos.route.js";
 
 const app = express();
 
@@ -13,7 +12,6 @@ app.use(express.json({ limit: "5mb" }));
 app.use("/webhook/clientes", clientesRoute);
 app.use("/webhook/pedidos", pedidosRoute);
 app.use("/webhook/notas", notasRoute);
-app.use("/webhook/contatos", contatosRoute);
 
 // ===============
 //  AMBIENTE LOCAL

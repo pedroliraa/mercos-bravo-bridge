@@ -5,11 +5,15 @@ import {
   mapPedidoItensMercosToBravo,
 } from "../mappers/mapPedidoMercosToBravo.js";
 
+import { handleNotaFromPedido } from "./notas.controller.js";
+import logger from "../utils/logger.js";
+
 export async function handlePedidoWebhook(req, res) {
   try {
     const eventos = req.body;
 
     if (!Array.isArray(eventos)) {
+      logger?.warn?.("Payload pedido não é array");
       return res.status(400).json({ error: "Payload inválido" });
     }
 
@@ -17,21 +21,40 @@ export async function handlePedidoWebhook(req, res) {
 
     for (const item of eventos) {
       const evento = item.evento;
-      const dados = item.dados;
+      const dados = item.dados || {};
 
-      console.info(`[INFO]: 📥 Evento recebido (PEDIDO): ${evento}`);
+      logger?.info?.(`📥 Evento recebido (PEDIDO): ${evento}`);
 
+      // ----------------------
+      // Pedido
+      // ----------------------
       const pedidoMapeado = mapPedidoMercosToBravo(evento, dados);
-      const itensMapeados = mapPedidoItensMercosToBravo(dados.itens);
 
-      console.info(
-        `[INFO]: 📤 Pedido mapeado: ${pedidoMapeado.codigo_pedido}, itens: ${itensMapeados.length}`
+      // ----------------------
+      // Itens do pedido
+      // ----------------------
+      const itensMapeados = mapPedidoItensMercosToBravo(dados.itens || []);
+
+      // ----------------------
+      // Nota (somente faturado)
+      // ----------------------
+      let notaMapeada = null;
+
+      if (evento === "pedido.faturado") {
+        notaMapeada = handleNotaFromPedido(dados);
+      }
+
+      logger?.info?.(
+        `📤 Pedido ${pedidoMapeado?.codigo_pedido} | Itens: ${itensMapeados.length} | Nota: ${
+          notaMapeada ? "gerada" : "não"
+        }`
       );
 
       results.push({
         evento,
         pedido: pedidoMapeado,
         itens: itensMapeados,
+        nota: notaMapeada,
       });
     }
 

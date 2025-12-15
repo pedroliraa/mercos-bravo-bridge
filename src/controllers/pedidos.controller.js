@@ -6,49 +6,94 @@ import {
 } from "../mappers/mapPedidoMercosToBravo.js";
 
 import { handleNotaFromPedido } from "./notas.controller.js";
+
+import {
+  sendPedidoToBravo,
+  sendPedidoItensToBravo,
+  sendNotaToBravo,
+} from "../services/bravo.service.js";
+
+import parseMercosPayload from "../services/mercosParser.service.js";
 import logger from "../utils/logger.js";
 
 export async function handlePedidoWebhook(req, res) {
   try {
-    const eventos = req.body;
-
-    if (!Array.isArray(eventos)) {
-      logger?.warn?.("Payload pedido não é array");
-      return res.status(400).json({ error: "Payload inválido" });
-    }
+    const eventos = parseMercosPayload(req.body, "pedido");
 
     const results = [];
 
     for (const item of eventos) {
-      const evento = item.evento;
-      const dados = item.dados || {};
+      const { evento, dados } = item;
 
       logger?.info?.(`📥 Evento recebido (PEDIDO): ${evento}`);
 
-      // ----------------------
-      // Pedido
-      // ----------------------
-      const pedidoMapeado = mapPedidoMercosToBravo(evento, dados);
+      /* ======================
+         PEDIDO
+      ====================== */
+      let pedidoMapeado = null;
 
-      // ----------------------
-      // Itens do pedido
-      // ----------------------
-      const itensMapeados = mapPedidoItensMercosToBravo(dados.itens || []);
+      try {
+        pedidoMapeado = mapPedidoMercosToBravo(evento, dados);
 
-      // ----------------------
-      // Nota (somente faturado)
-      // ----------------------
+        if (pedidoMapeado) {
+          await sendPedidoToBravo(pedidoMapeado);
+
+          logger?.info?.(
+            `✅ Pedido enviado: ${pedidoMapeado.codigo_pedido}`
+          );
+        }
+      } catch (err) {
+        logger?.error?.(
+          `❌ Erro ao enviar pedido ${dados?.id}`,
+          err
+        );
+      }
+
+      /* ======================
+         ITENS DO PEDIDO
+      ====================== */
+      let itensMapeados = [];
+
+      try {
+        itensMapeados = mapPedidoItensMercosToBravo(dados?.itens || []);
+
+        if (itensMapeados.length) {
+          await sendPedidoItensToBravo(itensMapeados);
+
+          logger?.info?.(
+            `✅ ${itensMapeados.length} item(ns) enviados`
+          );
+        }
+      } catch (err) {
+        logger?.error?.(
+          `❌ Erro ao enviar itens do pedido ${dados?.id}`,
+          err
+        );
+      }
+
+      /* ======================
+         NOTA (somente faturado)
+      ====================== */
       let notaMapeada = null;
 
       if (evento === "pedido.faturado") {
-        notaMapeada = handleNotaFromPedido(dados);
-      }
+        try {
+          notaMapeada = handleNotaFromPedido(dados);
 
-      logger?.info?.(
-        `📤 Pedido ${pedidoMapeado?.codigo_pedido} | Itens: ${itensMapeados.length} | Nota: ${
-          notaMapeada ? "gerada" : "não"
-        }`
-      );
+          if (notaMapeada) {
+            await sendNotaToBravo(notaMapeada);
+
+            logger?.info?.(
+              `✅ Nota enviada: ${notaMapeada.codigo_nota}`
+            );
+          }
+        } catch (err) {
+          logger?.error?.(
+            `❌ Erro ao enviar nota do pedido ${dados?.id}`,
+            err
+          );
+        }
+      }
 
       results.push({
         evento,
@@ -58,9 +103,15 @@ export async function handlePedidoWebhook(req, res) {
       });
     }
 
-    return res.status(200).json({ ok: true, results });
+    return res.status(200).json({
+      ok: true,
+      results,
+    });
   } catch (err) {
-    console.error("[ERRO PEDIDOS]:", err);
-    return res.status(500).json({ error: "Erro interno" });
+    logger?.error?.("[ERRO PEDIDOS]:", err);
+    return res.status(500).json({
+      ok: false,
+      error: "Erro interno no processamento de pedidos",
+    });
   }
 }

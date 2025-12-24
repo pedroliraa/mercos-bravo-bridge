@@ -1,6 +1,6 @@
 import { mapPedidoItemMercosToBravo } from "./mapPedidoItemMercosToBravo.js";
 
-export function mapPedidoMercosToBravo(evento, pedido) {
+export default function mapPedidoMercosToBravo(evento, pedido) {
   if (!pedido) return null;
 
   const itensMercos = Array.isArray(pedido.itens) ? pedido.itens : [];

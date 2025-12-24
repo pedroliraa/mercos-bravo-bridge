@@ -1,4 +1,4 @@
-export async function retry(fn, attempts = 3, delay = 300) {
+export default async function retry(fn, attempts = 3, delay = 300) {
   let tries = 0;
 
   while (tries < attempts) {

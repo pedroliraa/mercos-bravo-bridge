@@ -1,5 +1,5 @@
 // src/mappers/mapClienteMercosToBravo.js
-export function mapClienteMercosToBravo(cliente) {
+export default function mapClienteMercosToBravo(cliente) {
   if (!cliente || typeof cliente !== 'object') return {};
 
   // helper para pegar email/telefone primário

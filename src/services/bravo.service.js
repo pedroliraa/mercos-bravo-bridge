@@ -4,7 +4,7 @@ import { env } from "../config/env.js";
 import retry from "../utils/retry.js";
 
 /* ======================================================
-VALIDACÃO DE ENV (FAIL FAST)
+VALIDAÇÃO DE ENV (FAIL FAST)
 ====================================================== */
 if (!env.BRAVO_URL) {
   logger?.error?.("❌ BRAVO_URL não definida no ambiente");
@@ -32,34 +32,110 @@ const bravoApi = axios.create({
 });
 
 /* ======================================================
-Wrapper padrão com retry
+Wrapper padrão com retry + LOGS DETALHADOS DE ERROS
 ====================================================== */
 async function postToBravo(endpoint, payload) {
   return retry(async () => {
     logger.info(`🚀 [BRAVO] POST ${endpoint}`);
     logger.info(`   [BRAVO] Payload:\n${JSON.stringify(payload, null, 2)}`);
-    const response = await bravoApi.post(endpoint, payload);
-    logger.info(` ⬅️ [BRAVO] Status ${response.status} ${endpoint}`);
-    logger.info(`   [BRAVO] Response:\n${JSON.stringify(response.data, null, 2)}`);
 
-    if (
-      response.data?.success === false ||
-      response.data?.ok === false ||
-      response.data?.errors?.length
-    ) {
-      throw new Error(`Erro lógico Bravo: ${JSON.stringify(response.data)}`);
+    try {
+      const response = await bravoApi.post(endpoint, payload);
+
+      logger.info(`⬅️ [BRAVO] Status ${response.status} ${endpoint}`);
+      logger.info(`   [BRAVO] Response:\n${JSON.stringify(response.data, null, 2)}`);
+
+      // Verifica erro lógico mesmo com status 2xx
+      if (
+        response.data?.success === false ||
+        response.data?.ok === false ||
+        response.data?.errors?.length > 0 ||
+        response.data?.erros?.length > 0 ||
+        response.data?.mensagem
+      ) {
+        const erroMsg =
+          response.data?.erros ||
+          response.data?.errors ||
+          response.data?.mensagem ||
+          response.data?.message ||
+          JSON.stringify(response.data);
+
+        logger.error(`❌ [BRAVO] Erro lógico na resposta (status ${response.status})`);
+        logger.error(`   Detalhes: ${erroMsg}`);
+
+        if (Array.isArray(response.data?.erros)) {
+          logger.error("   🚨 Lista de erros do Bravo:");
+          response.data.erros.forEach((e, i) => logger.error(`     ${i + 1}. ${e}`));
+        }
+        if (Array.isArray(response.data?.errors)) {
+          logger.error("   🚨 Lista de errors (inglês):");
+          response.data.errors.forEach((e, i) => logger.error(`     ${i + 1}. ${e}`));
+        }
+
+        throw new Error(`Bravo retornou erro lógico: ${erroMsg}`);
+      }
+
+      return response.data;
+    } catch (error) {
+      // ============= ERRO HTTP (400, 404, 500 etc.) =============
+      if (error.response) {
+        const status = error.response.status;
+        const data = error.response.data || {};
+
+        logger.error(`❌ [BRAVO] HTTP ${status} em ${endpoint}`);
+        logger.error(`   [BRAVO] Response Error Body:\n${JSON.stringify(data, null, 2)}`);
+
+        // Destaque especial para os erros de validação do Bravo
+        if (Array.isArray(data?.erros) && data.erros.length > 0) {
+          logger.error("   🚨 Erros detalhados do Bravo (erros):");
+          data.erros.forEach((e, i) => logger.error(`     ${i + 1}. ${e}`));
+        }
+        if (Array.isArray(data?.errors) && data.errors.length > 0) {
+          logger.error("   🚨 Errors detalhados do Bravo (errors):");
+          data.errors.forEach((e, i) => logger.error(`     ${i + 1}. ${e}`));
+        }
+        if (data?.mensagem) {
+          logger.error(`   🚨 Mensagem: ${data.mensagem}`);
+        }
+        if (data?.message) {
+          logger.error(`   🚨 Message: ${data.message}`);
+        }
+
+        // Relança com contexto claro
+        throw new Error(`Bravo HTTP ${status}: ${JSON.stringify(data)}`);
+      }
+
+      // ============= SEM RESPOSTA (timeout, rede, etc.) =============
+      if (error.request) {
+        logger.error(`❌ [BRAVO] Sem resposta do servidor (timeout ou problema de rede) em ${endpoint}`);
+        throw new Error("Bravo sem resposta (timeout/rede)");
+      }
+
+      // ============= ERRO INESPERADO =============
+      logger.error(`❌ [BRAVO] Erro inesperado: ${error.message}`);
+      throw error;
     }
-
-    return response.data;
   });
 }
 
+/* ======================================================
+DELETE com tratamento amigável de 404
+====================================================== */
 async function deleteFromBravo(endpoint) {
   return retry(async () => {
     logger?.info(`🗑️ [BRAVO] DELETE → ${endpoint}`);
-    const response = await bravoApi.delete(endpoint);
-    logger?.info(`⬅️ [BRAVO] DELETE Status ${response.status}`);
-    return response.data;
+    try {
+      const response = await bravoApi.delete(endpoint);
+      logger?.info(`⬅️ [BRAVO] DELETE Status ${response.status}`);
+      return response.data;
+    } catch (error) {
+      if (error.response?.status === 404) {
+        logger?.info(`ℹ️ [BRAVO] DELETE 404 — recurso não existe (pode ser normal)`);
+        return null;
+      }
+      logger?.error(`❌ [BRAVO] Erro no DELETE ${endpoint}: ${error.response?.status || error.message}`);
+      throw error;
+    }
   });
 }
 
@@ -99,13 +175,10 @@ export async function deleteContatoFromBravo({ codigo_cliente, codigo_contato })
   return data;
 }
 
-// FUNÇÃO CORRIGIDA: Deleta contatos baseados nos IDs do Mercos (ex: 501, 502)
 export async function deleteAllContatosFromBravo(codigo_cliente, idsContatosMercos = []) {
   if (!codigo_cliente) return null;
 
   const suffixes = ["_email", "_tel", "_cel"];
-
-  // Se tivermos os ids do payload atual, usamos eles para limpar versões antigas
   const idsParaLimpar = idsContatosMercos.length > 0 ? idsContatosMercos : [];
 
   if (idsParaLimpar.length === 0) {
@@ -137,15 +210,32 @@ export async function sendPedidoToBravo(pedido) {
   return data;
 }
 
-/* ======================================================
-ITENS DO PEDIDO
-====================================================== */
 export async function sendPedidoItensToBravo(itens = []) {
   if (!itens.length) return null;
   const data = await postToBravo("/api/v1/vw_bravo_pedido_item", itens);
   logger?.info(`✅ Itens de pedido enviados: ${itens.length}`);
   return data;
 }
+
+export async function deletePedidoFromBravo({
+  codigo_filial,
+  codigo_pedido,
+  codigo_marca,
+}) {
+  if (!codigo_filial || !codigo_pedido || !codigo_marca) {
+    logger.warn("⚠️ Dados insuficientes para DELETE de pedido");
+    return null;
+  }
+
+  const endpoint =
+    `/api/v1/vw_bravo_pedido` +
+    `/codigo_filial/${codigo_filial}` +
+    `/codigo_pedido/${codigo_pedido}` +
+    `/codigo_marca/${codigo_marca}`;
+
+  return deleteFromBravo(endpoint);
+}
+
 
 /* ======================================================
 NOTAS FISCAIS

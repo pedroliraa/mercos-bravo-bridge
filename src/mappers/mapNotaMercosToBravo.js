@@ -5,11 +5,9 @@ export function mapNotaMercosToBravo(pedido) {
 
   return {
     // Identificação
-    codigo_filial: null,
+    codigo_filial: 1,
     codigo_nota: String(pedido.id), // usamos o ID do pedido como chave da nota
-    codigo_marca: pedido.representada_id
-      ? String(pedido.representada_id)
-      : null,
+    codigo_marca: 1,
 
     codigo_cliente: pedido.cliente_id
       ? String(pedido.cliente_id)

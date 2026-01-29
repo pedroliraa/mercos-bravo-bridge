@@ -12,16 +12,23 @@ import {
 } from "../services/bravo.service.js";
 import logger from "../utils/logger.js";
 
+// 🔹 Normalização simples: aceita objeto ou lista
+const normalizeToArray = (payload) => {
+  if (Array.isArray(payload)) return payload;
+  if (payload && typeof payload === "object") return [payload];
+  return [];
+};
+
 export const handleClienteWebhook = async (req, res) => {
   try {
     logger?.info("📥 [CLIENTES] Webhook recebido");
 
-    const eventos = req.body;
+    const eventos = normalizeToArray(req.body);
 
-    if (!Array.isArray(eventos)) {
+    if (!eventos.length) {
       return res.status(400).json({
         ok: false,
-        error: "Payload deve ser uma lista de eventos",
+        error: "Payload inválido: esperado objeto ou lista de eventos",
       });
     }
 
@@ -73,11 +80,11 @@ export const handleClienteWebhook = async (req, res) => {
 
             // Contatos
             if (Array.isArray(dados.contatos)) {
-              const idsContatos = dados.contatos.map(c => c.id.toString());
+              const idsContatos = dados.contatos.map((c) => c.id.toString());
               await deleteAllContatosFromBravo(dados.id.toString(), idsContatos);
 
               contatosMapped = dados.contatos
-                .flatMap(c => mapContatoMercosToBravo(c, dados))
+                .flatMap((c) => mapContatoMercosToBravo(c, dados))
                 .filter(Boolean);
 
               if (contatosMapped.length > 0) {

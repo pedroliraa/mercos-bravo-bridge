@@ -1,32 +1,21 @@
-import express from "express";
-
-import clientesRoute from "../src/routes/clientes.route.js";
-import pedidosRoute from "../src/routes/pedidos.route.js";
-
-// Imports explícitos pra retry (sem router/index.js pra evitar 404)
-import IntegrationEvent from "../src/models/integrationEvent.model.js";
+// api/retry.js - Vercel serverless function (GET /api/retry)
 import { processIntegrationEvent } from "../src/processors/integration.processor.js";
+import IntegrationEvent from "../src/models/integrationEvent.model.js";
 import { handleNotaFromPedido } from "../src/controllers/notas.controller.js";
 import { handleClienteWebhook } from "../src/controllers/clientes.controller.js";
 import { handlePedidoWebhook } from "../src/controllers/pedidos.controller.js";
 import logger from "../src/utils/logger.js";
-
 import { connectMongo } from "../src/database/mongo.js";
 
-const app = express();
+export default async function handler(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
 
-await connectMongo();
-console.log("✅ Mongo conectado");
-
-app.use(express.json({ limit: "5mb" }));
-
-// Webhooks
-app.use("/webhook/clientes", clientesRoute);
-app.use("/webhook/pedidos", pedidosRoute);
-
-// Rota retry direto no app (funciona na Vercel serverless)
-app.get("/api/retry-failed", async (req, res) => {
   try {
+    await connectMongo();
+    logger.info("[RETRY] Iniciando processamento de retry na Vercel");
+
     const COOLDOWN_MINUTES = 5;
     const MAX_RETRIES = 3;
 
@@ -36,10 +25,10 @@ app.get("/api/retry-failed", async (req, res) => {
 
     if (!failedEvents.length) {
       logger.info("[RETRY] Nenhum evento ERROR para reprocessar");
-      return res.json({ success: true, message: "Nenhum retry necessário" });
+      return res.status(200).json({ success: true, message: "Nenhum retry necessário" });
     }
 
-    logger.info(`[RETRY] Iniciando retry de ${failedEvents.length} eventos`);
+    logger.info(`[RETRY] Processando ${failedEvents.length} eventos falhados`);
 
     let successCount = 0;
     let failCount = 0;
@@ -103,24 +92,14 @@ app.get("/api/retry-failed", async (req, res) => {
       }
     }
 
-    res.json({
+    res.status(200).json({
       success: true,
       processed: successCount,
       failed: failCount,
       total: failedEvents.length,
     });
   } catch (err) {
-    logger.error(`[RETRY] Erro na rota retry-failed: ${err.message}`);
+    logger.error(`[RETRY] Erro crítico na Vercel: ${err.message}`);
     res.status(500).json({ error: err.message });
   }
-});
-
-// Ambiente local
-if (process.env.VERCEL !== "1") {
-  const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-  });
 }
-
-export default app;

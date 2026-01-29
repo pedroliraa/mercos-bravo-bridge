@@ -3,7 +3,7 @@ import express from "express";
 import clientesRoute from "../src/routes/clientes.route.js";
 import pedidosRoute from "../src/routes/pedidos.route.js";
 
-// Imports explícitos pra retry (sem router/index.js pra evitar 404)
+// Imports explícitos pra retry
 import IntegrationEvent from "../src/models/integrationEvent.model.js";
 import { processIntegrationEvent } from "../src/processors/integration.processor.js";
 import { handleNotaFromPedido } from "../src/controllers/notas.controller.js";
@@ -24,8 +24,10 @@ app.use(express.json({ limit: "5mb" }));
 app.use("/webhook/clientes", clientesRoute);
 app.use("/webhook/pedidos", pedidosRoute);
 
-// Rota retry direto no app (funciona na Vercel serverless)
+// Rota retry direto no app (sem fallback 404 pra testar)
 app.get("/api/retry-failed", async (req, res) => {
+  logger.info("[RETRY] Rota /api/retry-failed chamada no localhost/Vercel");
+
   try {
     const COOLDOWN_MINUTES = 5;
     const MAX_RETRIES = 3;
@@ -39,7 +41,7 @@ app.get("/api/retry-failed", async (req, res) => {
       return res.json({ success: true, message: "Nenhum retry necessário" });
     }
 
-    logger.info(`[RETRY] Iniciando retry de ${failedEvents.length} eventos`);
+    logger.info(`[RETRY] Processando ${failedEvents.length} eventos falhados`);
 
     let successCount = 0;
     let failCount = 0;

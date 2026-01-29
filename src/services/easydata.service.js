@@ -2,6 +2,7 @@
 
 import axios from 'axios';
 import logger from '../utils/logger.js';
+import { env } from "../config/env.js";
 
 const EASYDATA_BASE_URL = 'https://api.easydata.info/easydata';
 
@@ -10,13 +11,13 @@ const credentials = {
         workspace: 'grupo_force_atlanticordas',
         usuario: 'grupo_force',
         senha: 'grupo_force@456a',
-        'x-api-key': '3ed06472-6e11-456a-9d72-1f66d614bac5'
+        'x-api-key': env.API_EASY_TOKEN
     },
     rhpe: {
         workspace: 'grupo_force_rhpe_filial',
         usuario: 'grupo_force',
         senha: 'grupo_force@456a',
-        'x-api-key': '3ed06472-6e11-456a-9d72-1f66d614bac5'
+        'x-api-key': env.API_EASY_TOKEN
     }
 };
 

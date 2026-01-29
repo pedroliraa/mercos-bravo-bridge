@@ -6,4 +6,5 @@ export const env = {
   BRAVO_URL: process.env.BRAVO_URL,
   BRAVO_TOKEN: process.env.BRAVO_TOKEN,
   MONGO_URI: process.env.MONGO_URI,
+  API_EASY_TOKEN: process.env.API_EASY_TOKEN,
 };

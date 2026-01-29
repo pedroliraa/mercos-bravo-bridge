@@ -1,10 +1,9 @@
 import express from "express";
 
-// Importa rotas individuais (sem depender de index.js pra evitar erro de path)
 import clientesRoute from "../src/routes/clientes.route.js";
 import pedidosRoute from "../src/routes/pedidos.route.js";
 
-// Importa o retry diretamente (pra não depender do router completo)
+// Importa o retry diretamente (sem depender do router inteiro)
 import IntegrationEvent from "../src/models/integrationEvent.model.js";
 import { processIntegrationEvent } from "../src/processors/integration.processor.js";
 import { handleNotaFromPedido } from "../src/controllers/notas.controller.js";
@@ -21,11 +20,11 @@ console.log("✅ Mongo conectado");
 
 app.use(express.json({ limit: "5mb" }));
 
-// Webhooks específicos
+// Webhooks
 app.use("/webhook/clientes", clientesRoute);
 app.use("/webhook/pedidos", pedidosRoute);
 
-// Rota de retry direta no root (sem router intermediário)
+// Rota retry direto no app (sem router intermediário)
 app.get("/api/retry-failed", async (req, res) => {
   try {
     const COOLDOWN_MINUTES = 5;
@@ -111,7 +110,7 @@ app.get("/api/retry-failed", async (req, res) => {
       total: failedEvents.length,
     });
   } catch (err) {
-    logger.error(`[RETRY] Erro na rota: ${err.message}`);
+    logger.error(`[RETRY] Erro na rota retry-failed: ${err.message}`);
     res.status(500).json({ error: err.message });
   }
 });

@@ -1,11 +1,23 @@
 // src/mappers/mapNotaMercosToBravo.js
 
+function getCodigoFilialByRepresentada(representadaId) {
+  switch (Number(representadaId)) {
+    case 376068:
+      return "1";
+    case 382701:
+      return "2";
+    default:
+      return "1"; // fallback seguro
+  }
+}
+
+
 export function mapNotaMercosToBravo(pedido) {
   if (!pedido) return null;
 
   return {
     // Identificação
-    codigo_filial: 1,
+    codigo_filial: getCodigoFilialByRepresentada(pedido.representada_id),
     codigo_nota: String(pedido.id), // usamos o ID do pedido como chave da nota
     codigo_marca: 1,
 

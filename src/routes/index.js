@@ -5,18 +5,26 @@ import IntegrationEvent from "../models/integrationEvent.model.js";
 import { processIntegrationEvent } from "../processors/integration.processor.js";
 import logger from "../utils/logger.js";
 
+// Importa os handlers reais (ajuste paths se necessário)
+import { handleNotaFromPedido } from "../controllers/notas.controller.js";
+import { handleClienteWebhook } from "../controllers/clientes.controller.js";
+import { handlePedidoWebhook } from "../controllers/pedidos.controller.js";
+
 const router = express.Router();
 
+// Rotas de webhook (já estão no index.js, mas se quiser manter aqui também, ok)
 router.use("/clientes", clientesRoute);
 router.use("/pedidos", pedidosRoute);
 
-// Rota de retry manual (já existe, só ajustamos pra ter retryCount e cooldown)
+// Rota de retry funcional
 router.get("/api/retry-failed", async (req, res) => {
   try {
-    // Busca events ERROR, ordenados por createdAt (antigos primeiro), limite 20
+    const COOLDOWN_MINUTES = 5;
+    const MAX_RETRIES = 3;
+
     const failedEvents = await IntegrationEvent.find({ status: "ERROR" })
       .sort({ createdAt: 1 })
-      .limit(20);
+      .limit(50); // Aumentei pra 50 pra limpar mais rápido
 
     if (!failedEvents.length) {
       logger.info("[RETRY] Nenhum evento ERROR para reprocessar");
@@ -29,24 +37,37 @@ router.get("/api/retry-failed", async (req, res) => {
     let failCount = 0;
 
     for (const event of failedEvents) {
-      // Cooldown: não retry se última tentativa < 5 minutos
-      if (event.lastAttempt && (Date.now() - event.lastAttempt.getTime() < 5 * 60 * 1000)) {
+      // Cooldown
+      if (event.lastAttempt && (Date.now() - event.lastAttempt.getTime() < COOLDOWN_MINUTES * 60 * 1000)) {
         logger.warn(`Event ${event._id} em cooldown — pulando`);
         continue;
       }
 
-      // Limite de 3 tentativas
-      if (event.retryCount >= 3) {
+      // Limite de retries
+      if (event.retryCount >= MAX_RETRIES) {
         await IntegrationEvent.findByIdAndUpdate(event._id, { status: "FAILED" });
-        logger.error(`Event ${event._id} atingiu 3 retries — marcado FAILED`);
+        logger.error(`Event ${event._id} atingiu ${MAX_RETRIES} retries — marcado FAILED`);
         failCount++;
         continue;
       }
 
       try {
-        // Reconstrução simples do execute (só nota por enquanto, adicione outros tipos depois)
         const payload = event.payload;
-        const execute = () => handleNotaFromPedido(payload); // ajuste se tiver outros handlers
+        let execute;
+
+        switch (event.entityType) {
+          case "nota":
+            execute = () => handleNotaFromPedido(payload);
+            break;
+          case "cliente":
+            execute = () => handleClienteWebhook({ body: [payload] }); // simula array do webhook
+            break;
+          case "pedido":
+            execute = () => handlePedidoWebhook({ body: [payload] }); // simula array do webhook
+            break;
+          default:
+            throw new Error(`Tipo ${event.entityType} não suportado para retry`);
+        }
 
         await IntegrationEvent.findByIdAndUpdate(event._id, {
           status: "PROCESSING",

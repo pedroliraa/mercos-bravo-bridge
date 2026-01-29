@@ -12,6 +12,9 @@ import {
 } from "../services/bravo.service.js";
 import logger from "../utils/logger.js";
 
+// 🔹 IMPORTA A REGRA OFICIAL DE VENDEDOR (MESMA DO PEDIDO)
+import { getCodigoVendedorCRM } from "../mappers/mapClienteMercosToBravo.js";
+
 // 🔹 Normalização simples: aceita objeto ou lista
 const normalizeToArray = (payload) => {
   if (Array.isArray(payload)) return payload;
@@ -21,7 +24,7 @@ const normalizeToArray = (payload) => {
 
 export const handleClienteWebhook = async (req, res) => {
   try {
-    logger?.info("📥 [CLIENTES] Webhook recebido");
+    logger.info("📥 [CLIENTES] Webhook recebido");
 
     const eventos = normalizeToArray(req.body);
 
@@ -34,8 +37,7 @@ export const handleClienteWebhook = async (req, res) => {
 
     const results = [];
 
-    for (let i = 0; i < eventos.length; i++) {
-      const ev = eventos[i];
+    for (const ev of eventos) {
       const tipo = ev?.evento;
       const dados = ev?.dados || {};
 
@@ -59,54 +61,74 @@ export const handleClienteWebhook = async (req, res) => {
             await deleteClienteFromBravo(codigo_cliente);
             await deleteMarcaFromBravo({ codigo_cliente, codigo_marca: "1" });
             await deleteAllContatosFromBravo(codigo_cliente, []);
-          } else {
-            // Cliente
-            const dadosSemContatos = { ...dados };
-            delete dadosSemContatos.contatos;
+            return;
+          }
 
-            clienteMapped = mapClienteMercosToBravo(dadosSemContatos);
-            if (clienteMapped?.codigo_cliente) {
-              await sendClienteToBravo(clienteMapped);
-            }
+          // ================= CLIENTE =================
+          const dadosSemContatos = { ...dados };
+          delete dadosSemContatos.contatos;
 
-            // Marca
-            const marcaVinculo = {
-              codigo_cliente: dados.id.toString(),
-              codigo_marca: "1",
-              codigo_vendedor: dados.criador_id?.toString() || "1",
-            };
+          clienteMapped = mapClienteMercosToBravo(dadosSemContatos);
 
-            await sendMarcaToBravo(marcaVinculo);
+          if (clienteMapped?.codigo_cliente) {
+            await sendClienteToBravo(clienteMapped);
+          }
 
-            // Contatos
-            if (Array.isArray(dados.contatos)) {
-              const idsContatos = dados.contatos.map((c) => c.id.toString());
-              await deleteAllContatosFromBravo(dados.id.toString(), idsContatos);
+          // ================= VENDEDOR (CORRETO) =================
+          const codigoVendedorCRM =
+            dados?.criador_id && dados?.representada_id
+              ? getCodigoVendedorCRM(dados.representada_id, dados.criador_id)
+              : "1";
 
-              contatosMapped = dados.contatos
-                .flatMap((c) => mapContatoMercosToBravo(c, dados))
-                .filter(Boolean);
+          // ================= MARCA =================
+          await sendMarcaToBravo({
+            codigo_cliente: dados.id.toString(),
+            codigo_marca: "1",
+            codigo_vendedor: codigoVendedorCRM,
+            codigo_vendedor2: "",
+            codigo_gestor: "",
+            restricao: "",
+            categoria_carteira: "",
+            marca_campo_1: "",
+            marca_campo_2: "",
+            marca_campo_3: "",
+            marca_campo_4: "",
+            marca_campo_5: "",
+          });
 
-              if (contatosMapped.length > 0) {
-                await sendContatosToBravo(contatosMapped);
-              }
+          // ================= CONTATOS =================
+          if (Array.isArray(dados.contatos)) {
+            const idsContatos = dados.contatos.map((c) => c.id.toString());
+
+            await deleteAllContatosFromBravo(
+              dados.id.toString(),
+              idsContatos
+            );
+
+            contatosMapped = dados.contatos
+              .flatMap((c) => mapContatoMercosToBravo(c, dados))
+              .filter(Boolean);
+
+            if (contatosMapped.length > 0) {
+              await sendContatosToBravo(contatosMapped);
             }
           }
 
           results.push({
             evento: tipo,
             cliente: clienteMapped,
-            contatos: contatosMapped,
+            vendedor: codigoVendedorCRM,
+            contatos: contatosMapped.length,
           });
         },
       });
 
-      logger?.info(`[CLIENTES] Evento "${tipo}" finalizado`);
+      logger.info(`[CLIENTES] Evento "${tipo}" finalizado`);
     }
 
     return res.status(200).json({ ok: true, results });
   } catch (err) {
-    logger?.error("🔥 [CLIENTES] Erro geral no controller", err);
+    logger.error("🔥 [CLIENTES] Erro geral no controller", err);
     return res.status(500).json({
       ok: false,
       error: "Erro interno no processamento de clientes",

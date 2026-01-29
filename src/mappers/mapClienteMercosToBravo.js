@@ -11,7 +11,7 @@ function getCodigoFilialByRepresentada(representadaId) {
   }
 }
 
-function getCodigoVendedorCRM(representadaId, criadorId) {
+export function getCodigoVendedorCRM(representadaId, criadorId) {
   const idStr = String(criadorId);
 
   // 🔹 MATRIZ

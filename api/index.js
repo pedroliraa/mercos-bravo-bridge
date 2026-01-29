@@ -2,14 +2,7 @@ import express from "express";
 
 import clientesRoute from "../src/routes/clientes.route.js";
 import pedidosRoute from "../src/routes/pedidos.route.js";
-
-// Imports explícitos pra retry
-import IntegrationEvent from "../src/models/integrationEvent.model.js";
-import { processIntegrationEvent } from "../src/processors/integration.processor.js";
-import { handleNotaFromPedido } from "../src/controllers/notas.controller.js";
-import { handleClienteWebhook } from "../src/controllers/clientes.controller.js";
-import { handlePedidoWebhook } from "../src/controllers/pedidos.controller.js";
-import logger from "../src/utils/logger.js";
+import { handleRetryFailed } from "../src/controllers/retry.controller.js";
 
 import { connectMongo } from "../src/database/mongo.js";
 
@@ -23,101 +16,14 @@ app.use(express.json({ limit: "5mb" }));
 // Webhooks
 app.use("/webhook/clientes", clientesRoute);
 app.use("/webhook/pedidos", pedidosRoute);
+app.use("/api/retry-failed", handleRetryFailed);
 
-// Rota retry direto no app (sem fallback 404 pra testar)
-app.get("/api/retry-failed", async (req, res) => {
-  logger.info("[RETRY] Rota /api/retry-failed chamada no localhost/Vercel");
-
-  try {
-    const COOLDOWN_MINUTES = 5;
-    const MAX_RETRIES = 3;
-
-    const failedEvents = await IntegrationEvent.find({ status: "ERROR" })
-      .sort({ createdAt: 1 })
-      .limit(50);
-
-    if (!failedEvents.length) {
-      logger.info("[RETRY] Nenhum evento ERROR para reprocessar");
-      return res.json({ success: true, message: "Nenhum retry necessário" });
-    }
-
-    logger.info(`[RETRY] Processando ${failedEvents.length} eventos falhados`);
-
-    let successCount = 0;
-    let failCount = 0;
-
-    for (const event of failedEvents) {
-      if (event.lastAttempt && (Date.now() - event.lastAttempt.getTime() < COOLDOWN_MINUTES * 60 * 1000)) {
-        logger.warn(`Event ${event._id} em cooldown — pulando`);
-        continue;
-      }
-
-      if (event.retryCount >= MAX_RETRIES) {
-        await IntegrationEvent.findByIdAndUpdate(event._id, { status: "FAILED" });
-        logger.error(`Event ${event._id} atingiu ${MAX_RETRIES} retries — marcado FAILED`);
-        failCount++;
-        continue;
-      }
-
-      try {
-        const payload = event.payload;
-        let execute;
-
-        switch (event.entityType) {
-          case "nota":
-            execute = () => handleNotaFromPedido(payload);
-            break;
-          case "cliente":
-            execute = () => handleClienteWebhook({ body: [payload] });
-            break;
-          case "pedido":
-            execute = () => handlePedidoWebhook({ body: [payload] });
-            break;
-          default:
-            throw new Error(`Tipo ${event.entityType} não suportado`);
-        }
-
-        await IntegrationEvent.findByIdAndUpdate(event._id, {
-          status: "PROCESSING",
-          lastAttempt: new Date(),
-        });
-
-        await processIntegrationEvent({ eventId: event._id, execute });
-
-        await IntegrationEvent.findByIdAndUpdate(event._id, {
-          status: "PROCESSED",
-          error: null,
-          retryCount: 0,
-          lastAttempt: new Date(),
-        });
-
-        successCount++;
-      } catch (err) {
-        await IntegrationEvent.findByIdAndUpdate(event._id, {
-          status: "ERROR",
-          error: err.message,
-          retryCount: (event.retryCount || 0) + 1,
-          lastAttempt: new Date(),
-        });
-
-        failCount++;
-        logger.error(`[RETRY] Falha no event ${event._id}: ${err.message}`);
-      }
-    }
-
-    res.json({
-      success: true,
-      processed: successCount,
-      failed: failCount,
-      total: failedEvents.length,
-    });
-  } catch (err) {
-    logger.error(`[RETRY] Erro na rota retry-failed: ${err.message}`);
-    res.status(500).json({ error: err.message });
-  }
+// Fallback pra qualquer rota não encontrada (local e Vercel)
+app.all("*", (req, res) => {
+  res.status(404).json({ error: "Not found - use /webhook/clientes, /webhook/pedidos or /api/retry-failed" });
 });
 
-// Ambiente local
+// Ambiente local: inicia na porta
 if (process.env.VERCEL !== "1") {
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {

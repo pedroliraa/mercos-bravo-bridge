@@ -1,23 +1,17 @@
-// api/retry.js - Vercel serverless function (GET /api/retry)
-import { processIntegrationEvent } from "../src/processors/integration.processor.js";
-import IntegrationEvent from "../src/models/integrationEvent.model.js";
-import { handleNotaFromPedido } from "../src/controllers/notas.controller.js";
-import { handleClienteWebhook } from "../src/controllers/clientes.controller.js";
-import { handlePedidoWebhook } from "../src/controllers/pedidos.controller.js";
-import logger from "../src/utils/logger.js";
-import { connectMongo } from "../src/database/mongo.js";
+// src/controllers/retry.controller.js
+import IntegrationEvent from "../models/integrationEvent.model.js";
+import { processIntegrationEvent } from "../processors/integration.processor.js";
+import { handleNotaFromPedido } from "./notas.controller.js";
+import { handleClienteWebhook } from "./clientes.controller.js";
+import { handlePedidoWebhook } from "./pedidos.controller.js";
+import logger from "../utils/logger.js";
 
-export default async function handler(req, res) {
-  if (req.method !== "GET") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+const COOLDOWN_MINUTES = 5;
+const MAX_RETRIES = 3;
 
+export const handleRetryFailed = async (req, res) => {
   try {
-    await connectMongo();
-    logger.info("[RETRY] Iniciando processamento de retry na Vercel");
-
-    const COOLDOWN_MINUTES = 5;
-    const MAX_RETRIES = 3;
+    logger.info("[RETRY] Rota /api/retry-failed chamada");
 
     const failedEvents = await IntegrationEvent.find({ status: "ERROR" })
       .sort({ createdAt: 1 })
@@ -25,7 +19,7 @@ export default async function handler(req, res) {
 
     if (!failedEvents.length) {
       logger.info("[RETRY] Nenhum evento ERROR para reprocessar");
-      return res.status(200).json({ success: true, message: "Nenhum retry necessário" });
+      return res.json({ success: true, message: "Nenhum retry necessário" });
     }
 
     logger.info(`[RETRY] Processando ${failedEvents.length} eventos falhados`);
@@ -92,14 +86,14 @@ export default async function handler(req, res) {
       }
     }
 
-    res.status(200).json({
+    res.json({
       success: true,
       processed: successCount,
       failed: failCount,
       total: failedEvents.length,
     });
   } catch (err) {
-    logger.error(`[RETRY] Erro crítico na Vercel: ${err.message}`);
+    logger.error(`[RETRY] Erro na rota retry-failed: ${err.message}`);
     res.status(500).json({ error: err.message });
   }
-}
+};

@@ -1,4 +1,3 @@
-// src/controllers/retry.controller.js
 import IntegrationEvent from "../models/integrationEvent.model.js";
 import { processIntegrationEvent } from "../processors/integration.processor.js";
 import { handleNotaFromPedido } from "./notas.controller.js";
@@ -9,7 +8,7 @@ import logger from "../utils/logger.js";
 const COOLDOWN_MINUTES = 5;
 const MAX_RETRIES = 3;
 
-export const handleRetryFailed = async (req, res) => {
+export async function handleRetryFailed(req, res) {
   try {
     logger.info("[RETRY] Rota /api/retry-failed chamada");
 
@@ -55,7 +54,7 @@ export const handleRetryFailed = async (req, res) => {
             execute = () => handlePedidoWebhook({ body: [payload] });
             break;
           default:
-            throw new Error(`Tipo ${event.entityType} não suportado`);
+            throw new Error(`Tipo ${event.entityType} não suportado para retry`);
         }
 
         await IntegrationEvent.findByIdAndUpdate(event._id, {
@@ -96,4 +95,4 @@ export const handleRetryFailed = async (req, res) => {
     logger.error(`[RETRY] Erro na rota retry-failed: ${err.message}`);
     res.status(500).json({ error: err.message });
   }
-};
+}

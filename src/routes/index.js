@@ -8,7 +8,7 @@ const router = express.Router();
 router.use("/clientes", clientesRoute);
 router.use("/pedidos", pedidosRoute);
 
-// Rota retry normal (não serverless, funciona local e Vercel)
-router.get("/api/retry-failed", handleRetryFailed);
+// Rota retry
+router.get("/api/retry", handleRetryFailed);
 
 export default router;

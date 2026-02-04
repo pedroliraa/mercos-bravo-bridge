@@ -11,11 +11,10 @@ function getCodigoFilialByRepresentada(representadaId) {
   }
 }
 
-export function getCodigoVendedorCRM(representadaId, criadorId) {
+export function getCodigoVendedorCRM(criadorId) {
   const idStr = String(criadorId);
 
   // 🔹 MATRIZ
-  if (Number(representadaId) === 376068) {
     if (idStr === "614297") return "118";
     if (idStr === "635050") return "18";
     if (idStr === "635052") return "33";
@@ -49,10 +48,8 @@ export function getCodigoVendedorCRM(representadaId, criadorId) {
     if (idStr === "734850") return "131";
     if (idStr === "734851") return "87";
     if (idStr === "734852") return "88";
-  }
 
   // 🔹 FILIAL
-  if (Number(representadaId) === 382701) {
     if (idStr === "627498") return "118";
     if (idStr === "635460") return "1";
     if (idStr === "635461") return "6";
@@ -106,7 +103,6 @@ export function getCodigoVendedorCRM(representadaId, criadorId) {
     if (idStr === "697079") return "153";
     if (idStr === "712375") return "155";
     if (idStr === "717265") return "149";
-  }
 
   return "1"; // fallback seguro
 }
@@ -125,10 +121,9 @@ export default function mapClienteMercosToBravo(cliente) {
     return String(v).split("T")[0].split(" ")[0];
   };
 
-  const codigoVendedor =
-    cliente.criador_id && cliente.representada_id
-      ? getCodigoVendedorCRM(cliente.representada_id, cliente.criador_id)
-      : "1";
+  const codigoVendedor = cliente.criador_id
+  ? getCodigoVendedorCRMByCriador(cliente.criador_id)
+  : "1";
 
   return {
     codigo_cliente: cliente.id != null ? String(cliente.id) : null,

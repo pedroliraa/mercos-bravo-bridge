@@ -75,10 +75,9 @@ export const handleClienteWebhook = async (req, res) => {
           }
 
           // ================= VENDEDOR (CORRETO) =================
-          const codigoVendedorCRM =
-            dados?.criador_id && dados?.representada_id
-              ? getCodigoVendedorCRM(dados.representada_id, dados.criador_id)
-              : "1";
+          const codigoVendedorCRM = dados?.criador_id
+            ? getCodigoVendedorCRM(dados.criador_id)
+            : "1";
 
           // ================= MARCA =================
           await sendMarcaToBravo({
@@ -96,30 +95,50 @@ export const handleClienteWebhook = async (req, res) => {
             marca_campo_5: "",
           });
 
+          logger.info("🔍 [CLIENTES] dados.contatos recebido do Mercos:");
+          logger.info(JSON.stringify(dados.contatos, null, 2));
+
           // ================= CONTATOS =================
-          if (Array.isArray(dados.contatos)) {
-            const idsContatos = dados.contatos.map((c) => c.id.toString());
+          logger.info("🔍 [CLIENTES] Iniciando processamento de contatos");
+
+          const contatosMercos = Array.isArray(dados.contatos)
+            ? dados.contatos
+            : Array.isArray(dados?.contatos?.data)
+              ? dados.contatos.data
+              : [];
+
+          logger.info(`📌 [CLIENTES] contatosMercos normalizado: ${contatosMercos.length}`);
+          logger.info(JSON.stringify(contatosMercos, null, 2));
+
+          if (contatosMercos.length === 0) {
+            logger.warn("⚠️ [CLIENTES] Nenhum contato encontrado no payload — pulando envio");
+          } else {
+            const idsContatos = contatosMercos
+              .map((c) => c?.id)
+              .filter(Boolean)
+              .map(String);
+
+            logger.info(`🧹 [CLIENTES] IDs de contatos para limpeza: ${idsContatos.join(", ")}`);
 
             await deleteAllContatosFromBravo(
               dados.id.toString(),
               idsContatos
             );
 
-            contatosMapped = dados.contatos
+            contatosMapped = contatosMercos
               .flatMap((c) => mapContatoMercosToBravo(c, dados))
               .filter(Boolean);
 
+            logger.info(`🧩 [CLIENTES] contatos mapeados para Bravo: ${contatosMapped.length}`);
+            logger.info(JSON.stringify(contatosMapped, null, 2));
+
             if (contatosMapped.length > 0) {
               await sendContatosToBravo(contatosMapped);
+            } else {
+              logger.warn("⚠️ [CLIENTES] Mapper retornou array vazio");
             }
           }
 
-          results.push({
-            evento: tipo,
-            cliente: clienteMapped,
-            vendedor: codigoVendedorCRM,
-            contatos: contatosMapped.length,
-          });
         },
       });
 

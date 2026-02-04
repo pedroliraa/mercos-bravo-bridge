@@ -122,7 +122,7 @@ export default function mapClienteMercosToBravo(cliente) {
   };
 
   const codigoVendedor = cliente.criador_id
-  ? getCodigoVendedorCRMByCriador(cliente.criador_id)
+  ? getCodigoVendedorCRM(cliente.criador_id)
   : "1";
 
   return {

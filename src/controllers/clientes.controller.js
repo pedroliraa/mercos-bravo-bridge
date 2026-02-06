@@ -74,7 +74,7 @@ export const handleClienteWebhook = async (req, res) => {
             await sendClienteToBravo(clienteMapped);
           }
 
-          // ================= VENDEDOR (CORRETO) =================
+          // ================= VENDEDOR =================
           const codigoVendedorCRM = dados?.criador_id
             ? getCodigoVendedorCRM(dados.criador_id)
             : "1";
@@ -101,24 +101,56 @@ export const handleClienteWebhook = async (req, res) => {
           // ================= CONTATOS =================
           logger.info("🔍 [CLIENTES] Iniciando processamento de contatos");
 
-          const contatosMercos = Array.isArray(dados.contatos)
+          let contatosMercos = Array.isArray(dados.contatos)
             ? dados.contatos
             : Array.isArray(dados?.contatos?.data)
               ? dados.contatos.data
               : [];
 
-          logger.info(`📌 [CLIENTES] contatosMercos normalizado: ${contatosMercos.length}`);
+          // 🔧 FALLBACK: cria contato default a partir do cliente
+          if (
+            contatosMercos.length === 0 &&
+            (dados.emails?.length || dados.telefones?.length)
+          ) {
+            logger.warn(
+              "⚠️ [CLIENTES] Nenhum contato vindo do Mercos — criando contato default a partir do cliente"
+            );
+
+            contatosMercos = [
+              {
+                id: `cliente_${dados.id}`,
+                nome:
+                  dados.nome_fantasia ||
+                  dados.razao_social ||
+                  "Contato Principal",
+                cargo: null,
+                emails: dados.emails || [],
+                telefones: dados.telefones || [],
+                excluido: false,
+              },
+            ];
+          }
+
+          logger.info(
+            `📌 [CLIENTES] contatosMercos normalizado: ${contatosMercos.length}`
+          );
           logger.info(JSON.stringify(contatosMercos, null, 2));
 
           if (contatosMercos.length === 0) {
-            logger.warn("⚠️ [CLIENTES] Nenhum contato encontrado no payload — pulando envio");
+            logger.warn(
+              "⚠️ [CLIENTES] Nenhum contato encontrado no payload — pulando envio"
+            );
           } else {
             const idsContatos = contatosMercos
               .map((c) => c?.id)
               .filter(Boolean)
               .map(String);
 
-            logger.info(`🧹 [CLIENTES] IDs de contatos para limpeza: ${idsContatos.join(", ")}`);
+            logger.info(
+              `🧹 [CLIENTES] IDs de contatos para limpeza: ${idsContatos.join(
+                ", "
+              )}`
+            );
 
             await deleteAllContatosFromBravo(
               dados.id.toString(),
@@ -129,7 +161,9 @@ export const handleClienteWebhook = async (req, res) => {
               .flatMap((c) => mapContatoMercosToBravo(c, dados))
               .filter(Boolean);
 
-            logger.info(`🧩 [CLIENTES] contatos mapeados para Bravo: ${contatosMapped.length}`);
+            logger.info(
+              `🧩 [CLIENTES] contatos mapeados para Bravo: ${contatosMapped.length}`
+            );
             logger.info(JSON.stringify(contatosMapped, null, 2));
 
             if (contatosMapped.length > 0) {
@@ -138,7 +172,6 @@ export const handleClienteWebhook = async (req, res) => {
               logger.warn("⚠️ [CLIENTES] Mapper retornou array vazio");
             }
           }
-
         },
       });
 

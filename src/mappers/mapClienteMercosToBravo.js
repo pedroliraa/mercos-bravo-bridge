@@ -1,5 +1,5 @@
 // ======================================================
-// CONSTANTES DE REPRESENTADA (INFERIDAS)
+// CONSTANTES DE REPRESENTADA
 // ======================================================
 const REPRESENTADA_MATRIZ = 376068;
 const REPRESENTADA_FILIAL = 382701;
@@ -103,20 +103,15 @@ const VENDEDORES_FILIAL = {
 };
 
 // ======================================================
-// IDENTIFICA SE É MATRIZ OU FILIAL PELO CRIADOR_ID
+// IDENTIFICA REPRESENTADA
 // ======================================================
 function identificarRepresentadaPorVendedor(criadorId) {
   const idStr = String(criadorId);
 
-  if (VENDEDORES_MATRIZ[idStr]) {
-    return REPRESENTADA_MATRIZ;
-  }
+  if (VENDEDORES_MATRIZ[idStr]) return REPRESENTADA_MATRIZ;
+  if (VENDEDORES_FILIAL[idStr]) return REPRESENTADA_FILIAL;
 
-  if (VENDEDORES_FILIAL[idStr]) {
-    return REPRESENTADA_FILIAL;
-  }
-
-  return REPRESENTADA_MATRIZ; // fallback seguro
+  return REPRESENTADA_MATRIZ;
 }
 
 // ======================================================
@@ -135,11 +130,14 @@ export function getCodigoVendedorCRM(criadorId) {
     return VENDEDORES_FILIAL[idStr];
   }
 
+  console.warn(
+    `[VENDEDOR] criador_id ${idStr} não mapeado — usando fallback 1`
+  );
   return "1";
 }
 
 // ======================================================
-// CÓDIGO DA FILIAL (BRAVO)
+// FILIAL
 // ======================================================
 function getCodigoFilialByRepresentada(representadaId) {
   switch (Number(representadaId)) {
@@ -153,31 +151,11 @@ function getCodigoFilialByRepresentada(representadaId) {
 }
 
 // ======================================================
-// CONTATOS
-// ======================================================
-function mapContatosMercos(contatos = [], codigoCliente) {
-  if (!Array.isArray(contatos)) return [];
-
-  return contatos
-    .filter((c) => !c.excluido)
-    .map((contato) => ({
-      codigo_cliente: String(codigoCliente),
-      codigo_contato: String(contato.id),
-      nome: contato.nome || null,
-      cargo: contato.cargo || null,
-      email: contato.emails?.[0]?.email ?? null,
-      telefone: contato.telefones?.[0]?.numero ?? null,
-      excluido: !!contato.excluido,
-    }));
-}
-
-// ======================================================
 // MAPPER PRINCIPAL
 // ======================================================
 export default function mapClienteMercosToBravo(input) {
   if (!input || typeof input !== "object") return {};
 
-  // 🔥 NORMALIZAÇÃO
   const cliente = input.dados ?? input;
 
   const representadaInferida = identificarRepresentadaPorVendedor(
@@ -220,6 +198,6 @@ export default function mapClienteMercosToBravo(input) {
     excluido: !!cliente.excluido,
     descricao: cliente.observacao || null,
 
-    contatos: mapContatosMercos(cliente.contatos, cliente.id),
+    contatos: [], // CONTATOS tratados exclusivamente no controller
   };
 }

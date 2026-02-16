@@ -45,7 +45,7 @@ export const handleClienteWebhook = async (req, res) => {
       const integrationEvent = await IntegrationEvent.create({
         source: "mercos",
         entityType: "cliente",
-        entityId: dados.id?.toString(),
+        entityId: dados.cnpj?.toString(),
         eventType: tipo,
         payload: ev,
         status: "PENDING",
@@ -58,7 +58,7 @@ export const handleClienteWebhook = async (req, res) => {
           let contatosMapped = [];
 
           if (tipo === "cliente.excluido") {
-            const codigo_cliente = dados.id.toString();
+            const codigo_cliente = dados.cnpj.toString();
             await deleteClienteFromBravo(codigo_cliente);
             await deleteMarcaFromBravo({ codigo_cliente, codigo_marca: "1" });
             await deleteAllContatosFromBravo(codigo_cliente, []);
@@ -88,7 +88,7 @@ export const handleClienteWebhook = async (req, res) => {
 
           // ================= MARCA =================
           await sendMarcaToBravo({
-            codigo_cliente: dados.id.toString(),
+            codigo_cliente: dados.cnpj.toString(),
             codigo_marca: "1",
             codigo_vendedor: codigoVendedorCRM,
             codigo_vendedor2: "",
@@ -125,7 +125,7 @@ export const handleClienteWebhook = async (req, res) => {
 
             contatosMercos = [
               {
-                id: `cliente_${dados.id}`,
+                id: `cliente_${dados.cnpj}`,
                 nome:
                   dados.nome_fantasia ||
                   dados.razao_social ||

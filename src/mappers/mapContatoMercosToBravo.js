@@ -14,7 +14,7 @@ export default function mapContatoMercosToBravo(contatoMercos, clienteMercos) {
     return [];
   }
 
-  const codigo_cliente = clienteMercos.id?.toString();
+  const codigo_cliente = clienteMercos.cnpj?.toString();
   const codigo_base = contatoMercos.id?.toString();
   const nome = contatoMercos.nome ?? null;
   const cargo = contatoMercos.cargo ?? null;

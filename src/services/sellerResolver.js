@@ -67,15 +67,22 @@ export async function resolveSellerByMercosId(mercosSellerId) {
     });
 
   } else {
-    logger.info(`🔄 [SELLER] Vendedor já existe por email — atualizando vínculo Mercos`);
+  logger.info(`🔄 [SELLER] Vendedor já existe por email — atualizando vínculo Mercos`);
 
-    seller.mercos[empresa] = vendedor.id;
-    await seller.save();
+  seller.mercos[empresa] = vendedor.id;
 
-    logger.info(
-      `🔄 [SELLER] Vínculo ${empresa} atualizado com ID ${vendedor.id}`
-    );
+  // 🔥 ATUALIZA NOME SE MUDOU
+  if (seller.name !== vendedor.nome) {
+    logger.info(`✏️ [SELLER] Atualizando nome de ${seller.name} → ${vendedor.nome}`);
+    seller.name = vendedor.nome;
   }
+
+  await seller.save();
+
+  logger.info(
+    `🔄 [SELLER] Vínculo ${empresa} atualizado com ID ${vendedor.id}`
+  );
+}
 
   const bravoPayload = {
     codigo_vendedor: seller.bravoSellerCode,
@@ -86,7 +93,8 @@ export async function resolveSellerByMercosId(mercosSellerId) {
     email_gestor: ""
   };
 
-  logger.info(`📤 [SELLER] Upsert no Bravo | codigo=${seller.bravoSellerCode}`);
+  logger.info("🧪 [SELLER] Payload enviado para Bravo:");
+logger.info(JSON.stringify(bravoPayload, null, 2));
 
   await upsertBravoSeller(bravoPayload);
 

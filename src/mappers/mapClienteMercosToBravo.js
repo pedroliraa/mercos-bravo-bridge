@@ -1,140 +1,5 @@
-// ======================================================
-// CONSTANTES DE REPRESENTADA
-// ======================================================
-const REPRESENTADA_MATRIZ = 376068;
-const REPRESENTADA_FILIAL = 382701;
-
-// ======================================================
-// VENDEDORES DA MATRIZ
-// ======================================================
-const VENDEDORES_MATRIZ = {
-  "614297": "118",
-  "635050": "18",
-  "635052": "33",
-  "635055": "49",
-  "635056": "51",
-  "635057": "56",
-  "635060": "61",
-  "635065": "74",
-  "635067": "82",
-  "635080": "127",
-  "635114": "116",
-  "636808": "46",
-  "637387": "16",
-  "643921": "28",
-  "657650": "133",
-  "679718": "142",
-  "686638": "30",
-  "695303": "3",
-  "697081": "153",
-  "703818": "101",
-  "705118": "79",
-  "712374": "155",
-  "717565": "149",
-  "721669": "68",
-  "723571": "140",
-  "725092": "102",
-  "731205": "58",
-  "734847": "150",
-  "734848": "83",
-  "734849": "106",
-  "734850": "131",
-  "734851": "87",
-  "734852": "88",
-};
-
-// ======================================================
-// VENDEDORES DA FILIAL
-// ======================================================
-const VENDEDORES_FILIAL = {
-  "627498": "118",
-  "635460": "1",
-  "635461": "6",
-  "635462": "11",
-  "635463": "17",
-  "635464": "19",
-  "635466": "18",
-  "635467": "33",
-  "635468": "37",
-  "635469": "40",
-  "635470": "49",
-  "635472": "51",
-  "635473": "56",
-  "635474": "58",
-  "635475": "60",
-  "635477": "61",
-  "635479": "66",
-  "635481": "70",
-  "635482": "73",
-  "635483": "74",
-  "635484": "76",
-  "635485": "82",
-  "635486": "84",
-  "635487": "90",
-  "635488": "98",
-  "635489": "107",
-  "635490": "110",
-  "635491": "111",
-  "635492": "112",
-  "635494": "117",
-  "635495": "121",
-  "635496": "122",
-  "635497": "123",
-  "635498": "124",
-  "635499": "127",
-  "635500": "129",
-  "635501": "130",
-  "635502": "135",
-  "635503": "152",
-  "635504": "154",
-  "635505": "116",
-  "636809": "46",
-  "637389": "10",
-  "637390": "151",
-  "637391": "16",
-  "643926": "28",
-  "661897": "133",
-  "679717": "142",
-  "685385": "3",
-  "686635": "30",
-  "697079": "153",
-  "712375": "155",
-  "717265": "149",
-};
-
-// ======================================================
-// IDENTIFICA REPRESENTADA
-// ======================================================
-function identificarRepresentadaPorVendedor(criadorId) {
-  const idStr = String(criadorId);
-
-  if (VENDEDORES_MATRIZ[idStr]) return REPRESENTADA_MATRIZ;
-  if (VENDEDORES_FILIAL[idStr]) return REPRESENTADA_FILIAL;
-
-  return REPRESENTADA_MATRIZ;
-}
-
-// ======================================================
-// CÓDIGO DO VENDEDOR (CRM)
-// ======================================================
-export function getCodigoVendedorCRM(criadorId) {
-  if (criadorId == null) return "1";
-
-  const idStr = String(criadorId);
-
-  if (VENDEDORES_MATRIZ[idStr]) {
-    return VENDEDORES_MATRIZ[idStr];
-  }
-
-  if (VENDEDORES_FILIAL[idStr]) {
-    return VENDEDORES_FILIAL[idStr];
-  }
-
-  console.warn(
-    `[VENDEDOR] criador_id ${idStr} não mapeado — usando fallback 1`
-  );
-  return "1";
-}
+import logger from "../utils/logger.js";
+import { resolveSellerByMercosId } from "../services/sellerResolver.js";
 
 // ======================================================
 // FILIAL
@@ -153,22 +18,42 @@ function getCodigoFilialByRepresentada(representadaId) {
 // ======================================================
 // MAPPER PRINCIPAL
 // ======================================================
-export default function mapClienteMercosToBravo(input) {
-  if (!input || typeof input !== "object") return {};
+export default async function mapClienteMercosToBravo(input, seller) {
+  if (!input || typeof input !== "object") {
+    logger.warn("[MAPPER_CLIENTE] Input inválido recebido", input);
+    return {};
+  }
 
   const cliente = input.dados ?? input;
 
-  const representadaInferida = identificarRepresentadaPorVendedor(
-    cliente.criador_id
+  logger.info(
+    `🧩 [MAPPER_CLIENTE] Iniciando mapeamento do cliente | id=${cliente.id} | criador_id=${cliente.criador_id}`
   );
 
-  const codigoVendedor = getCodigoVendedorCRM(cliente.criador_id);
+  //const representadaInferida = identificarRepresentadaPorVendedor(
+  //  cliente.criador_id
+  //);
+
+  //logger.info(
+  //  `🏢 [MAPPER_CLIENTE] Representada inferida: ${representadaInferida}`
+  //);
+
+  // 🔑 RESOLVE VENDEDOR (Mongo → Bravo)
+  logger.info(
+    `🔑 [MAPPER_CLIENTE] Resolvendo vendedor para Mercos ID ${cliente.criador_id}`
+  );
+
+  //const seller = await resolveSellerByMercosId(cliente.criador_id);
+
+  logger.info(
+    `✅ [MAPPER_CLIENTE] Vendedor resolvido | bravoSellerCode=${seller?.bravoSellerCode}`
+  );
 
   const toDateOnly = (v) =>
     v ? String(v).split(" ")[0].split("T")[0] : null;
 
-  return {
-    codigo_cliente: String(cliente.id),
+  const payload = {
+    codigo_cliente: cliente.cnpj || null,
     cnpj: cliente.cnpj || null,
     razao_social: cliente.razao_social || cliente.nome || null,
     nome_fantasia: cliente.nome_fantasia || cliente.nome || null,
@@ -191,13 +76,21 @@ export default function mapClienteMercosToBravo(input) {
     email_principal: cliente.emails?.[0]?.email ?? null,
     telefone_principal: cliente.telefones?.[0]?.numero ?? null,
 
-    codigo_vendedor: codigoVendedor,
-    codigo_filial: getCodigoFilialByRepresentada(representadaInferida),
+    // 🎯 AQUI É O PONTO-CHAVE
+    codigo_vendedor: seller.bravoSellerCode,
+
+    codigo_filial: null,
 
     bloqueado: !!cliente.bloqueado,
     excluido: !!cliente.excluido,
     descricao: cliente.observacao || null,
 
-    contatos: [], // CONTATOS tratados exclusivamente no controller
+    contatos: [],
   };
+
+  logger.info(
+    `📦 [MAPPER_CLIENTE] Payload Bravo gerado | codigo_cliente=${payload.codigo_cliente} | codigo_vendedor=${payload.codigo_vendedor} | codigo_filial=${payload.codigo_filial}`
+  );
+
+  return payload;
 }

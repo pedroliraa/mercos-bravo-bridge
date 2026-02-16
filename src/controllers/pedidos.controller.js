@@ -13,6 +13,7 @@ import {
 } from "../services/bravo.service.js";
 import { parseMercosPayload } from "../services/mercosParser.service.js";
 import logger from "../utils/logger.js";
+import { resolveSellerByMercosId } from "../services/sellerResolver.js";
 
 export async function handlePedidoWebhook(req, res) {
   try {
@@ -58,7 +59,7 @@ export async function handlePedidoWebhook(req, res) {
             return;
           }
 
-          const pedidoMapeado = mapPedidoMercosToBravo(evento, dados);
+          const pedidoMapeado = await mapPedidoMercosToBravo(evento, dados);
           if (pedidoMapeado) {
             await sendPedidoToBravo(pedidoMapeado);
           }
@@ -71,7 +72,11 @@ export async function handlePedidoWebhook(req, res) {
             await sendPedidoItensToBravo(itensMapeados);
           }
 
-          const codigoVendedor = dados.criador_id?.toString() || "1";
+          const seller = dados?.criador_id
+            ? await resolveSellerByMercosId(dados.criador_id)
+            : null;
+
+          const codigoVendedorCRM = seller?.bravoSellerCode || "1";
           const codigoCliente =
             pedidoMapeado?.codigo_cliente ||
             dados.cliente_id?.toString();
@@ -80,7 +85,7 @@ export async function handlePedidoWebhook(req, res) {
             await sendMarcaToBravo({
               codigo_cliente: codigoCliente,
               codigo_marca: "1",
-              codigo_vendedor: codigoVendedor,
+              codigo_vendedor: codigoVendedorCRM,
               codigo_vendedor2: "",
               codigo_gestor: "",
               restricao: "",

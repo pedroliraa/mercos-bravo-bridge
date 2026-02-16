@@ -13,7 +13,8 @@ import {
 import logger from "../utils/logger.js";
 
 // 🔹 IMPORTA A REGRA OFICIAL DE VENDEDOR (MESMA DO PEDIDO)
-import { getCodigoVendedorCRM } from "../mappers/mapClienteMercosToBravo.js";
+//import { getCodigoVendedorCRM } from "../mappers/mapClienteMercosToBravo.js"
+import { resolveSellerByMercosId } from "../services/sellerResolver.js";;
 
 // 🔹 Normalização simples: aceita objeto ou lista
 const normalizeToArray = (payload) => {
@@ -68,16 +69,22 @@ export const handleClienteWebhook = async (req, res) => {
           const dadosSemContatos = { ...dados };
           delete dadosSemContatos.contatos;
 
-          clienteMapped = mapClienteMercosToBravo(dadosSemContatos);
+          const seller = dados?.criador_id
+            ? await resolveSellerByMercosId(dados.criador_id)
+            : null;
+
+          clienteMapped = await mapClienteMercosToBravo(dadosSemContatos, seller);
 
           if (clienteMapped?.codigo_cliente) {
             await sendClienteToBravo(clienteMapped);
           }
 
           // ================= VENDEDOR =================
-          const codigoVendedorCRM = dados?.criador_id
-            ? getCodigoVendedorCRM(dados.criador_id)
-            : "1";
+          /*const seller = dados?.criador_id
+            ? await resolveSellerByMercosId(dados.criador_id)
+            : null;*/
+
+          const codigoVendedorCRM = seller?.bravoSellerCode || "1";
 
           // ================= MARCA =================
           await sendMarcaToBravo({

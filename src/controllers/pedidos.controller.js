@@ -99,7 +99,7 @@ export async function handlePedidoWebhook(req, res) {
           }
 
           if (evento === "pedido.faturado") {
-            const notaMapeada = handleNotaFromPedido(dados);
+            const notaMapeada = await handleNotaFromPedido(dados);
             if (notaMapeada) {
               await sendNotaToBravo(notaMapeada);
             }

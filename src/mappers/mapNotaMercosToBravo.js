@@ -1,4 +1,6 @@
 // src/mappers/mapNotaMercosToBravo.js
+import { resolveSellerByMercosId } from "../services/sellerResolver.js";
+import logger from "../utils/logger.js";
 
 function getCodigoFilialByRepresentada(representadaId) {
   switch (Number(representadaId)) {
@@ -7,46 +9,54 @@ function getCodigoFilialByRepresentada(representadaId) {
     case 382701:
       return "2";
     default:
-      return "1"; // fallback seguro
+      return "1";
   }
 }
 
-
-export function mapNotaMercosToBravo(pedido) {
+export async function mapNotaMercosToBravo(pedido) {
   if (!pedido) return null;
 
-  return {
-    // Identificação
+  logger.info(
+    `🧾 [MAPPER_NOTA] Iniciando mapeamento da nota | pedido_id=${pedido.id}`
+  );
+
+  // 🔑 RESOLVE VENDEDOR IGUAL AO PEDIDO
+  let seller = null;
+
+  if (pedido.criador_id) {
+    logger.info(
+      `🔑 [MAPPER_NOTA] Resolvendo vendedor | mercos_criador_id=${pedido.criador_id}`
+    );
+
+    seller = await resolveSellerByMercosId(pedido.criador_id);
+
+    logger.info(
+      `✅ [MAPPER_NOTA] Vendedor resolvido | bravoSellerCode=${seller?.bravoSellerCode}`
+    );
+  }
+
+  const payload = {
     codigo_filial: getCodigoFilialByRepresentada(pedido.representada_id),
-    codigo_nota: String(pedido.id), // usamos o ID do pedido como chave da nota
-    codigo_marca: 1,
 
-    codigo_cliente: pedido.cliente_id
-      ? String(pedido.cliente_id)
+    codigo_nota: String(pedido.id),
+    codigo_marca: "1",
+
+    codigo_cliente: pedido.cliente_cnpj
+      ? String(pedido.cliente_cnpj)
       : null,
 
-    codigo_vendedor: pedido.criador_id
-      ? String(pedido.criador_id)
-      : null,
+    // ✅ CORRETO
+    codigo_vendedor: seller?.bravoSellerCode || "1",
 
-    // Datas
     data_nota: pedido.data_emissao || null,
     data_saida: pedido.data_emissao || null,
-    hora_saida: null,
-    data_recebimento: null,
 
-    // Documento
     numero_documento: pedido.numero
       ? String(pedido.numero)
       : null,
 
-    serie: null,
-    chave_acesso: null,
-
-    // Comercial
     considerar_venda: true,
     tipo_nota: "VENDA",
-    natureza_operacao: null,
     situacao: "Faturado",
 
     comprador:
@@ -54,47 +64,25 @@ export function mapNotaMercosToBravo(pedido) {
       pedido.contato_nome ||
       null,
 
-    // Valores
     total_nota: Number(pedido.total) || 0,
     valor_total_nota: Number(pedido.total) || 0,
     valor_total_produtos: Number(pedido.total) || 0,
 
     valor_frete: Number(pedido.valor_frete) || 0,
-    valor_seguro: null,
-    descontos: null,
-    outras_despesas: null,
 
-    valor_ipi: null,
-    valor_icms: null,
-    base_calculo_icms: null,
-    valor_icms_st: null,
-    base_calculo_icms_st: null,
-    valor_total_tributos: null,
-
-    // Logística
-    qtd_volumes: null,
-    especie_volumes: null,
-    peso_bruto: null,
-    peso_liquido: null,
+    parcelas: pedido.condicao_pagamento_id || null,
+    prazo: pedido.condicao_pagamento || null,
 
     tipo_frete: pedido.transportadora_nome || null,
     transportadora: pedido.transportadora_nome || null,
 
-    // Financeiro
-    parcelas: pedido.condicao_pagamento_id || null,
-    prazo: pedido.condicao_pagamento || null,
-
-    // Previsão
-    previsao_entrega: null,
-
-    // Campos extras
-    nota_campo_1: null,
-    nota_campo_2: null,
-    nota_campo_3: null,
-    nota_campo_4: null,
-    nota_campo_5: null,
-
     informacoes_complementares: pedido.observacoes || null,
     observacoes_nota: pedido.observacoes || null,
   };
+
+  logger.info(
+    `📦 [MAPPER_NOTA] Payload gerado | codigo_nota=${payload.codigo_nota} | codigo_vendedor=${payload.codigo_vendedor}`
+  );
+
+  return payload;
 }

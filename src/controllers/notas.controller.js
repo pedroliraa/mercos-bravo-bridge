@@ -51,7 +51,7 @@ export async function handleNotaFromPedido(pedido) {
         fkFaturamento
       );
 
-      notaMapeada = mapNotaMercosToBravo(pedido, faturamento);
+      notaMapeada = await mapNotaMercosToBravo(pedido, faturamento);
       itensMapeados = itensEasyData
         .map((item) => mapNotaItemMercosToBravo(item, pedido))
         .filter(Boolean);

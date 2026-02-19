@@ -53,8 +53,8 @@ export default async function mapPedidoMercosToBravo(evento, pedido) {
     codigo_pedido: String(pedido.id),
     codigo_marca: "1",
 
-    codigo_cliente: pedido.cliente_id
-      ? String(pedido.cliente_id)
+    codigo_cliente: pedido.cnpj
+      ? String(pedido.cnpj)
       : null,
 
     // 🎯 VENDEDOR UNIFICADO

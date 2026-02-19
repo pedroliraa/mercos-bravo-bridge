@@ -79,7 +79,7 @@ export async function handlePedidoWebhook(req, res) {
           const codigoVendedorCRM = seller?.bravoSellerCode || "1";
           const codigoCliente =
             pedidoMapeado?.codigo_cliente ||
-            dados.cnpj?.toString();
+            dados.cliente_cnpj?.toString();
 
           if (codigoCliente) {
             await sendMarcaToBravo({

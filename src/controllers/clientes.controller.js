@@ -87,20 +87,32 @@ export const handleClienteWebhook = async (req, res) => {
           const codigoVendedorCRM = seller?.bravoSellerCode || "1";
 
           // ================= MARCA =================
-          await sendMarcaToBravo({
-            codigo_cliente: dados.cnpj.toString(),
-            codigo_marca: "1",
-            codigo_vendedor: codigoVendedorCRM,
-            codigo_vendedor2: "",
-            codigo_gestor: "",
-            restricao: "",
-            categoria_carteira: "",
-            marca_campo_1: "",
-            marca_campo_2: "",
-            marca_campo_3: "",
-            marca_campo_4: "",
-            marca_campo_5: "",
-          });
+          const shouldSendMarca = tipo === "cliente.cadastrado";
+
+          if (shouldSendMarca) {
+            await sendMarcaToBravo({
+              codigo_cliente: dados.cnpj.toString(),
+              codigo_marca: "1",
+              codigo_vendedor: codigoVendedorCRM,
+              codigo_vendedor2: "",
+              codigo_gestor: "",
+              restricao: "",
+              categoria_carteira: "",
+              marca_campo_1: "",
+              marca_campo_2: "",
+              marca_campo_3: "",
+              marca_campo_4: "",
+              marca_campo_5: "",
+            });
+
+            logger.info(
+              `🏷️ [CLIENTES] Marca enviada (evento: ${tipo})`
+            );
+          } else {
+            logger.info(
+              `⏭️ [CLIENTES] Marca ignorada (evento: ${tipo})`
+            );
+          }
 
           logger.info("🔍 [CLIENTES] dados.contatos recebido do Mercos:");
           logger.info(JSON.stringify(dados.contatos, null, 2));

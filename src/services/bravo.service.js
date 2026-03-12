@@ -292,3 +292,68 @@ export async function deleteMarcaFromBravo({
   return data;
 }
 
+/* ======================================================
+FATURAS/TITULOS
+====================================================== */
+export async function sendFaturasToBravo(faturas) {
+  try {
+    logger.info(`[BRAVO] Enviando ${faturas.length} faturas`);
+
+    const { data } = await bravoApi.post(
+      "/api/v1/vw_bravo_fatura",
+      faturas
+    );
+
+    logger.info(`[BRAVO] Faturas enviadas com sucesso`);
+
+    return data;
+  } catch (error) {
+    logger.error(
+      "[BRAVO] Erro ao enviar faturas",
+      error.response?.data || error.message
+    );
+    throw error;
+  }
+}
+
+/* ======================================================
+COTAÇÕES/ORÇAMENTOS
+====================================================== */
+export async function sendCotacoesToBravo(cotacoes) {
+  try {
+    logger.info(`[BRAVO] Enviando ${cotacoes.length} cotações`);
+
+    const { data } = await bravoApi.post(
+      "/api/v1/vw_bravo_cotacao",
+      cotacoes
+    );
+
+    logger.info(`[BRAVO] Cotações enviadas com sucesso`);
+
+    return data;
+  } catch (error) {
+    logger.error(
+      "[BRAVO] Erro ao enviar cotações",
+      error.response?.data || error.message
+    );
+    throw error;
+  }
+}
+
+export async function sendCotacaoItensToBravo(itens) {
+
+  try {
+    const response = await bravoApi.post(
+      "/api/v1/vw_bravo_cotacao_item",
+      itens
+    );
+
+    logger.info("[BRAVO] Cotacao item enviada com sucesso");
+
+    return response.data;
+
+  } catch (err) {
+    logger.error("[BRAVO] Erro ao enviar cotacao item");
+    throw err;
+  }
+}

@@ -1,5 +1,5 @@
 import IntegrationSeller from "../models/integrationSeller.model.js";
-import { getMercosSellerById } from "./mercosApi.js";
+import { getMercosSellerById } from "./mercos.service.js";
 import { upsertBravoSeller } from "./bravoApi.js";
 import logger from "../utils/logger.js";
 

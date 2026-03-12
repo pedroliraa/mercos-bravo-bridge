@@ -12,9 +12,11 @@ import {
 } from "../services/bravo.service.js";
 import logger from "../utils/logger.js";
 
-// 🔹 IMPORTA A REGRA OFICIAL DE VENDEDOR (MESMA DO PEDIDO)
-//import { getCodigoVendedorCRM } from "../mappers/mapClienteMercosToBravo.js"
-import { resolveSellerByMercosId } from "../services/sellerResolver.js";;
+// 🔹 IMPORTA A REGRA OFICIAL DE VENDEDOR
+import { resolveSellerByMercosId } from "../services/sellerResolver.js";
+
+// 🔹 SERVICE PARA SALVAR CLIENTE MERCOS NO MONGO
+import { saveOrUpdateClienteMercos } from "../services/clienteMongo.service.js";
 
 // 🔹 Normalização simples: aceita objeto ou lista
 const normalizeToArray = (payload) => {
@@ -65,6 +67,28 @@ export const handleClienteWebhook = async (req, res) => {
             return;
           }
 
+          // ================= SALVAR CLIENTE NO MONGO =================
+          try {
+            await saveOrUpdateClienteMercos(dados);
+
+            logger.info(
+              `💾 [CLIENTES] Cliente Mercos salvo/atualizado no Mongo`,
+              {
+                mercosId: dados.id,
+                cnpj: dados.cnpj,
+                razao_social: dados.razao_social,
+              }
+            );
+          } catch (err) {
+            logger.error(
+              `❌ [CLIENTES] Erro ao salvar cliente Mercos no Mongo`,
+              {
+                mercosId: dados.id,
+                error: err.message,
+              }
+            );
+          }
+
           // ================= CLIENTE =================
           const dadosSemContatos = { ...dados };
           delete dadosSemContatos.contatos;
@@ -73,17 +97,16 @@ export const handleClienteWebhook = async (req, res) => {
             ? await resolveSellerByMercosId(dados.criador_id)
             : null;
 
-          clienteMapped = await mapClienteMercosToBravo(dadosSemContatos, seller);
+          clienteMapped = await mapClienteMercosToBravo(
+            dadosSemContatos,
+            seller
+          );
 
           if (clienteMapped?.codigo_cliente) {
             await sendClienteToBravo(clienteMapped);
           }
 
           // ================= VENDEDOR =================
-          /*const seller = dados?.criador_id
-            ? await resolveSellerByMercosId(dados.criador_id)
-            : null;*/
-
           const codigoVendedorCRM = seller?.bravoSellerCode || "1";
 
           // ================= MARCA =================
@@ -105,13 +128,9 @@ export const handleClienteWebhook = async (req, res) => {
               marca_campo_5: "",
             });
 
-            logger.info(
-              `🏷️ [CLIENTES] Marca enviada (evento: ${tipo})`
-            );
+            logger.info(`🏷️ [CLIENTES] Marca enviada (evento: ${tipo})`);
           } else {
-            logger.info(
-              `⏭️ [CLIENTES] Marca ignorada (evento: ${tipo})`
-            );
+            logger.info(`⏭️ [CLIENTES] Marca ignorada (evento: ${tipo})`);
           }
 
           logger.info("🔍 [CLIENTES] dados.contatos recebido do Mercos:");
@@ -123,8 +142,8 @@ export const handleClienteWebhook = async (req, res) => {
           let contatosMercos = Array.isArray(dados.contatos)
             ? dados.contatos
             : Array.isArray(dados?.contatos?.data)
-              ? dados.contatos.data
-              : [];
+            ? dados.contatos.data
+            : [];
 
           // 🔧 FALLBACK: cria contato default a partir do cliente
           if (

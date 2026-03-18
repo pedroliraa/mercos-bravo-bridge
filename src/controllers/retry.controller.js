@@ -3,6 +3,8 @@ import { processIntegrationEvent } from "../processors/integration.processor.js"
 import { handleNotaFromPedido } from "./notas.controller.js";
 import { handleClienteWebhook } from "./clientes.controller.js";
 import { handlePedidoWebhook } from "./pedidos.controller.js";
+import { handleRetryTitulo } from "../integration/handlers/retry.titulo.js";
+import {handleRetryCotacao} from "../integration/handlers/retry.cotacao.js";
 import logger from "../utils/logger.js";
 
 const COOLDOWN_MINUTES = 5;
@@ -52,6 +54,13 @@ export async function handleRetryFailed(req, res) {
             break;
           case "pedido":
             execute = () => handlePedidoWebhook({ body: [payload] });
+            break;
+          case "titulo":
+            execute = () => handleRetryTitulo(payload);
+            break;
+
+          case "cotacao":
+            execute = () => handleRetryCotacao(payload);
             break;
           default:
             throw new Error(`Tipo ${event.entityType} não suportado para retry`);

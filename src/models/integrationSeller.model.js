@@ -13,6 +13,14 @@ const IntegrationSellerSchema = new mongoose.Schema(
       filial: {
         type: Number,
         index: true
+      },
+      atomy: { 
+        type: Number, 
+        index: true 
+      },
+      ankorfit: { 
+        type: Number, 
+        index: true 
       }
     },
 

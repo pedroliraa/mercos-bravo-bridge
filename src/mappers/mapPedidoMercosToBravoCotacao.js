@@ -1,9 +1,24 @@
+function getCodigoFilialByRepresentada(representadaId) {
+  switch (Number(representadaId)) {
+    case 376068:
+      return "1"; // Matriz
+    case 382701:
+      return "2"; // Filial
+    case 424288: 
+      return "3"; // Atomy
+    case 424289:
+      return "4"; // Ankorfit
+    default:
+      return "1";
+  }
+}
+
 export default function mapPedidoMercosToBravoCotacao(
   pedido,
   seller
 ) {
   return {
-    codigo_filial: "1",
+    codigo_filial: getCodigoFilialByRepresentada(pedido.representada_id),
     codigo_cotacao: String(pedido.id),
     codigo_marca: "1",
 

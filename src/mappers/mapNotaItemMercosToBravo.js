@@ -4,6 +4,10 @@ function getCodigoFilialByRepresentada(representadaId) {
       return "1";
     case 382701:
       return "2";
+    case 424288:
+      return "3";
+    case 424289:
+      return "4";
     default:
       return "1";
   }

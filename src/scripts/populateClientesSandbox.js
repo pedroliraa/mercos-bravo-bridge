@@ -29,10 +29,22 @@ const clientesRhpe = await getClientesComPaginacao(
   env.MERCOS_COMPANY_TOKEN_RHPE
 );
 
+// 3️⃣ busca clientes da Atomy
+const clientesAtomy = await getClientesComPaginacao(
+  env.MERCOS_COMPANY_TOKEN_ATOMY
+);  
+
+// 4️⃣ busca clientes da Ankorfit
+const clientesAnkorfit = await getClientesComPaginacao(
+  env.MERCOS_COMPANY_TOKEN_ANKORFIT
+);
+
 logger.info(`📦 ATLANTIS: ${clientesAtlantis.length}`)
 logger.info(`📦 RHPE: ${clientesRhpe.length}`)
+logger.info(`📦 ATOMY: ${clientesAtomy.length}`)
+logger.info(`📦 ANKORFIT: ${clientesAnkorfit.length}`)
 
-const clientes = [...clientesAtlantis, ...clientesRhpe];
+const clientes = [...clientesAtlantis, ...clientesRhpe, ...clientesAtomy, ...clientesAnkorfit];
 
     logger.info(`📦 ${clientes.length} clientes encontrados no Mercos`);
 

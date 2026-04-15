@@ -52,9 +52,14 @@ export async function handleNotaFromPedido(pedido) {
       );
 
       notaMapeada = await mapNotaMercosToBravo(pedido, faturamento);
-      itensMapeados = itensEasyData
-        .map((item) => mapNotaItemMercosToBravo(item, pedido))
-        .filter(Boolean);
+
+      if (notaMapeada.codigo_filial === "1" || notaMapeada.codigo_filial === "2") {
+
+        itensMapeados = itensEasyData
+          .map((item) => mapNotaItemMercosToBravo(item, pedido))
+          .filter(Boolean);
+
+      }
 
       if (
         !notaMapeada ||
@@ -67,8 +72,11 @@ export async function handleNotaFromPedido(pedido) {
 
       await sendNotaToBravo(notaMapeada);
 
-      if (itensMapeados.length > 0) {
-        await sendNotaItensToBravo(itensMapeados);
+      if (notaMapeada.codigo_filial === "1" || notaMapeada.codigo_filial === "2") {
+
+        if (itensMapeados.length > 0) {
+          await sendNotaItensToBravo(itensMapeados);
+        }
       }
     },
   });

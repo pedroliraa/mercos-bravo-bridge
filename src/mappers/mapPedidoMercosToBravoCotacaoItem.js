@@ -1,3 +1,18 @@
+function getCodigoFilialByRepresentada(representadaId) {
+  switch (Number(representadaId)) {
+    case 376068:
+      return "1"; // Matriz
+    case 382701:
+      return "2"; // Filial
+    case 424288: 
+      return "3"; // Atomy
+    case 424289:
+      return "4"; // Ankorfit
+    default:
+      return "1";
+  }
+}
+
 export default function mapItensParaCotacaoItemBravo(pedido, produtosMap) {
 
   return pedido.itens.map((item, index) => {
@@ -8,7 +23,7 @@ export default function mapItensParaCotacaoItemBravo(pedido, produtosMap) {
     const valorTotal = item.preco_liquido != null ? String(item.preco_liquido * item.quantidade) : "0";
 
     return {
-      codigo_filial: "1",
+      codigo_filial: getCodigoFilialByRepresentada(pedido.representada_id),
       codigo_cotacao: String(pedido.id),
       codigo_marca: "1",
       item: String(index + 1),

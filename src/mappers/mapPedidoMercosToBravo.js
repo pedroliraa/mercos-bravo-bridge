@@ -10,6 +10,10 @@ function getCodigoFilialByRepresentada(representadaId) {
       return "1"; // Matriz
     case 382701:
       return "2"; // Filial
+    case 424288: 
+      return "3"; // Atomy
+    case 424289:
+      return "4"; // Ankorfit
     default:
       return "1";
   }

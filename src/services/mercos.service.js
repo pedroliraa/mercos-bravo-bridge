@@ -18,6 +18,11 @@ function formatMercosDate(date) {
 
 // 🔥 Helper robusto de paginação
 async function fetchComPaginacao({ endpoint, companyToken, alteradoApos }) {
+    if (!companyToken) {
+        logger.warn(`[MERCOS] Token não informado para ${endpoint} — pulando`);
+        return [];
+    }
+
     const mercosApi = createMercosApi(companyToken);
 
     let todosRegistros = [];
@@ -56,8 +61,7 @@ async function fetchComPaginacao({ endpoint, companyToken, alteradoApos }) {
             if (Array.isArray(data) && data.length > 0) {
                 todosRegistros.push(...data);
 
-                const ultimaAlteracao =
-                    data[data.length - 1]?.ultima_alteracao;
+                const ultimaAlteracao = data[data.length - 1]?.ultima_alteracao;
 
                 if (!ultimaAlteracao) {
                     logger.warn(
@@ -73,14 +77,7 @@ async function fetchComPaginacao({ endpoint, companyToken, alteradoApos }) {
 
             const limitou = headers["meuspedidos_limitou_registros"];
 
-            if (limitou == 1) {
-                logger.info(
-                    `[MERCOS] Paginação detectada | buscando próxima página`
-                );
-                continuar = true;
-            } else {
-                continuar = false;
-            }
+            continuar = limitou == 1;
 
         } catch (err) {
             logger.error(`[MERCOS] Erro ao buscar ${endpoint}`);
@@ -109,55 +106,51 @@ async function fetchComPaginacao({ endpoint, companyToken, alteradoApos }) {
     return todosRegistros;
 }
 
+// ✅ FUNÇÃO CORRIGIDA (SUPORTA 4 EMPRESAS)
 export async function getMercosSellerById(id) {
     logger.info(`[MERCOS] Buscando vendedor no Mercos | id=${id}`);
 
-    const tokens = [
-        env.MERCOS_COMPANY_TOKEN_RHPE,
-        env.MERCOS_COMPANY_TOKEN_ATLANTIS
+    const empresas = [
+        { nome: "filial", token: env.MERCOS_COMPANY_TOKEN_RHPE },
+        { nome: "matriz", token: env.MERCOS_COMPANY_TOKEN_ATLANTIS },
+        { nome: "atomy", token: env.MERCOS_COMPANY_TOKEN_ATOMY },
+        { nome: "ankorfit", token: env.MERCOS_COMPANY_TOKEN_ANKORFIT }
     ];
 
-    for (let i = 0; i < tokens.length; i++) {
+    for (const empresaObj of empresas) {
+        const { nome, token } = empresaObj;
 
-        const empresa = i === 0 ? "RHPE" : "ATLANTIS";
-        const mercosApi = createMercosApi(tokens[i]);
+        if (!token) {
+            logger.warn(`[MERCOS] Token não configurado para ${nome} — pulando`);
+            continue;
+        }
+
+        const mercosApi = createMercosApi(token);
 
         try {
-
             const { data } = await mercosApi.get(`/usuarios/${id}`);
 
             logger.info(
-                `[MERCOS] Vendedor encontrado na empresa ${empresa} | id=${data?.id} | nome=${data?.nome}`
+                `[MERCOS] Vendedor encontrado na empresa ${nome} | id=${data?.id} | nome=${data?.nome}`
             );
 
             return {
-                empresa: empresa === "RHPE" ? "filial" : "matriz",
+                empresa: nome,
                 vendedor: data
             };
 
         } catch (err) {
-
-            // 🔥 se não encontrou OU token não pertence à empresa → tenta próxima
             if (err.response?.status === 404 || err.response?.status === 401) {
-
                 logger.warn(
-                    `[MERCOS] Vendedor não encontrado na empresa ${empresa} | tentando próxima`
+                    `[MERCOS] Não encontrado na ${nome} — tentando próxima`
                 );
-
                 continue;
             }
 
-            if (err.response) {
-                logger.error(
-                    `[MERCOS] Erro na API Mercos | status=${err.response.status} | id=${id}`,
-                    err.response.data
-                );
-            } else {
-                logger.error(
-                    `[MERCOS] Erro ao chamar API Mercos | id=${id}`,
-                    err
-                );
-            }
+            logger.error(
+                `[MERCOS] Erro ao buscar vendedor | empresa=${nome} | id=${id}`,
+                err
+            );
 
             throw err;
         }
@@ -170,114 +163,91 @@ export async function getMercosSellerById(id) {
     throw new Error("Vendedor não encontrado em nenhuma empresa");
 }
 
+// ================= TITULOS =================
 export async function getTitulosComPaginacao(alteradoApos) {
+    const empresas = [
+        { nome: "ATLANTIS", token: env.MERCOS_COMPANY_TOKEN_ATLANTIS },
+        { nome: "RHPE", token: env.MERCOS_COMPANY_TOKEN_RHPE },
+        { nome: "ATOMY", token: env.MERCOS_COMPANY_TOKEN_ATOMY },
+        { nome: "ANKORFIT", token: env.MERCOS_COMPANY_TOKEN_ANKORFIT }
+    ];
 
     let todosTitulos = [];
 
-    // 🔹 busca títulos da MATRIZ (ATLANTIS)
-    const titulosAtlantis = await fetchComPaginacao({
-        endpoint: "/v1/titulos",
-        companyToken: env.MERCOS_COMPANY_TOKEN_ATLANTIS,
-        alteradoApos
-    });
+    for (const empresa of empresas) {
+        const titulos = await fetchComPaginacao({
+            endpoint: "/v1/titulos",
+            companyToken: empresa.token,
+            alteradoApos
+        });
 
-    const titulosAtlantisComEmpresa = titulosAtlantis.map(titulo => ({
-        ...titulo,
-        empresa: "ATLANTIS"
-    }));
+        logger.info(`[MERCOS] ${empresa.nome} títulos: ${titulos.length}`);
 
-    // 🔹 busca títulos da FILIAL (RHPE)
-    const titulosRhpe = await fetchComPaginacao({
-        endpoint: "/v1/titulos",
-        companyToken: env.MERCOS_COMPANY_TOKEN_RHPE,
-        alteradoApos
-    });
+        todosTitulos.push(
+            ...titulos.map(t => ({
+                ...t,
+                empresa: empresa.nome
+            }))
+        );
+    }
 
-    const titulosRhpeComEmpresa = titulosRhpe.map(titulo => ({
-        ...titulo,
-        empresa: "RHPE"
-    }));
-
-    todosTitulos = [
-        ...titulosAtlantisComEmpresa,
-        ...titulosRhpeComEmpresa
-    ];
-
-    logger.info(`[MERCOS] ATLANTIS títulos: ${titulosAtlantis.length}`);
-    logger.info(`[MERCOS] RHPE títulos: ${titulosRhpe.length}`);
-    logger.info(`[MERCOS] Total títulos coletados: ${todosTitulos.length}`);
+    logger.info(`[MERCOS] Total títulos: ${todosTitulos.length}`);
 
     return todosTitulos;
 }
 
+// ================= PEDIDOS =================
 export async function getPedidosComPaginacao(alteradoApos) {
+    const empresas = [
+        { nome: "ATLANTIS", token: env.MERCOS_COMPANY_TOKEN_ATLANTIS },
+        { nome: "RHPE", token: env.MERCOS_COMPANY_TOKEN_RHPE },
+        { nome: "ATOMY", token: env.MERCOS_COMPANY_TOKEN_ATOMY },
+        { nome: "ANKORFIT", token: env.MERCOS_COMPANY_TOKEN_ANKORFIT }
+    ];
 
     let todosPedidos = [];
 
-    // 🔹 busca pedidos da MATRIZ (ATLANTIS)
-    const pedidosAtlantis = await fetchComPaginacao({
-        endpoint: "/v2/pedidos",
-        companyToken: env.MERCOS_COMPANY_TOKEN_ATLANTIS,
-        alteradoApos
-    });
+    for (const empresa of empresas) {
+        const pedidos = await fetchComPaginacao({
+            endpoint: "/v2/pedidos",
+            companyToken: empresa.token,
+            alteradoApos
+        });
 
-    const pedidosAtlantisComEmpresa = pedidosAtlantis.map(pedido => ({
-        ...pedido,
-        empresa: "ATLANTIS"
-    }));
+        logger.info(`[MERCOS] ${empresa.nome} pedidos: ${pedidos.length}`);
 
-    // 🔹 busca pedidos da FILIAL (RHPE)
-    const pedidosRhpe = await fetchComPaginacao({
-        endpoint: "/v2/pedidos",
-        companyToken: env.MERCOS_COMPANY_TOKEN_RHPE,
-        alteradoApos
-    });
+        todosPedidos.push(
+            ...pedidos.map(p => ({
+                ...p,
+                empresa: empresa.nome
+            }))
+        );
+    }
 
-    const pedidosRhpeComEmpresa = pedidosRhpe.map(pedido => ({
-        ...pedido,
-        empresa: "RHPE"
-    }));
-
-    todosPedidos = [
-        ...pedidosAtlantisComEmpresa,
-        ...pedidosRhpeComEmpresa
-    ];
-
-    logger.info(`[MERCOS] ATLANTIS pedidos: ${pedidosAtlantis.length}`);
-    logger.info(`[MERCOS] RHPE pedidos: ${pedidosRhpe.length}`);
-    logger.info(`[MERCOS] Total pedidos coletados: ${todosPedidos.length}`);
+    logger.info(`[MERCOS] Total pedidos: ${todosPedidos.length}`);
 
     return todosPedidos;
 }
 
-
-export async function getClienteById(mercosId) {
-    const companyToken = env.MERCOS_COMPANY_TOKENS[0]; // ✅ pega apenas o primeiro token válido
-    console.log(`[MERCOS] 🔍 getClienteById chamado para ID: ${mercosId}`);
-    //console.log(`[MERCOS] 🛡️ Usando CompanyToken: ${companyToken}`);
-
-    const mercosApi = createMercosApi(companyToken);
-
-    const response = await mercosApi.get(`/v1/clientes/${mercosId}`);
-    console.log(`[MERCOS] ✅ Cliente ${mercosId} retornou status ${response.status}`);
-    console.log(`[MERCOS] 📦 Dados do cliente:`, response.data);
-
-    return response.data;
-}
-
+// ================= CLIENTES =================
 export async function getClientesComPaginacao(companyToken, alteradoApos) {
-
-    // 🔹 fallback: últimos 18 meses
     if (!alteradoApos) {
         const date = new Date();
         date.setMonth(date.getMonth() - 24);
         alteradoApos = date.toISOString();
     }
 
-    logger.info(`[MERCOS] Buscando clientes alterados após: ${alteradoApos}`);
-    logger.info(`[MERCOS] Company Token: ${companyToken}`)
+    let empresaNome = "UNKNOWN";
 
-    let todosClientes = [];
+    if (companyToken === env.MERCOS_COMPANY_TOKEN_RHPE) {
+        empresaNome = "RHPE";
+    } else if (companyToken === env.MERCOS_COMPANY_TOKEN_ATLANTIS) {
+        empresaNome = "ATLANTIS";
+    } else if (companyToken === env.MERCOS_COMPANY_TOKEN_ATOMY) {
+        empresaNome = "ATOMY";
+    } else if (companyToken === env.MERCOS_COMPANY_TOKEN_ANKORFIT) {
+        empresaNome = "ANKORFIT";
+    }
 
     const clientes = await fetchComPaginacao({
         endpoint: "/v1/clientes",
@@ -286,21 +256,11 @@ export async function getClientesComPaginacao(companyToken, alteradoApos) {
     });
 
     logger.info(
-        `[MERCOS] ${clientes.length} clientes coletados para token ${companyToken}`
+        `[MERCOS] ${clientes.length} clientes coletados (${empresaNome})`
     );
 
-    clientes.forEach(cliente => {
-        todosClientes.push({
-            ...cliente,
-            empresa: companyToken === env.MERCOS_COMPANY_TOKEN_RHPE
-                ? "RHPE"
-                : "ATLANTIS"
-        });
-    });
-
-    logger.info(
-        `[MERCOS] Total clientes coletados: ${todosClientes.length}`
-    );
-
-    return todosClientes;
+    return clientes.map(cliente => ({
+        ...cliente,
+        empresa: empresaNome
+    }));
 }

@@ -1,6 +1,5 @@
 import {
-    getPedidosComPaginacao,
-    getClienteById
+    getPedidosComPaginacao
 } from "../services/mercos.service.js";
 
 import {

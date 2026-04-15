@@ -128,7 +128,7 @@ export async function getMercosSellerById(id) {
         const mercosApi = createMercosApi(token);
 
         try {
-            const { data } = await mercosApi.get(`/usuarios/${id}`);
+            const { data } = await mercosApi.get(`/v1/usuarios/${id}`);
 
             logger.info(
                 `[MERCOS] Vendedor encontrado na empresa ${nome} | id=${data?.id} | nome=${data?.nome}`

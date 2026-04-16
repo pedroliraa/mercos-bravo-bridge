@@ -16,7 +16,7 @@ import logger from "../utils/logger.js";
 import { resolveSellerByMercosId } from "../services/sellerResolver.js";
 
 // 🔥 IMPORTS NOVOS
-import Cliente from "../models/cliente.model.js";
+import Cliente from "../models/integrationClient.model.js"
 import { handleClienteWebhook } from "./clientes.controller.js";
 
 // ======================================================

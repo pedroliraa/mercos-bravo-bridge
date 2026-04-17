@@ -173,3 +173,51 @@ export async function handleWebhookOrcamentos(req, res) {
         });
     }
 }
+
+export async function enviarCotacaoFromPedido(pedido, situacaoCustom) {
+  try {
+    logger.info(`📑 [ORCAMENTOS] Recebido pedido ${pedido.id} para envio como cotação`);
+
+    const seller = pedido?.criador_id
+      ? await resolveSellerByMercosId(pedido.criador_id)
+      : null;
+
+    const codigoVendedorCRM = seller?.bravoSellerCode || "1";
+
+    let cotacaoMapeada =
+      mapPedidoMercosToBravoCotacao(pedido, codigoVendedorCRM);
+
+    // 🔥 AQUI É O PONTO PRINCIPAL
+    cotacaoMapeada.situacao = situacaoCustom;
+
+    logger.info(
+      `[ORCAMENTOS] Cotação com situação ${situacaoCustom}: ${JSON.stringify(cotacaoMapeada, null, 2)}`
+    );
+
+    // 🔥 NÃO envia itens (como você pediu)
+    await sendCotacoesToBravo([cotacaoMapeada]);
+
+    // 🔥 Marca continua igual
+    if (pedido.cliente_cnpj) {
+      await sendMarcaToBravo({
+        codigo_cliente: pedido.cliente_cnpj.toString(),
+        codigo_marca: "1",
+        codigo_vendedor: codigoVendedorCRM,
+        codigo_vendedor2: "",
+        codigo_gestor: "",
+        restricao: "",
+        categoria_carteira: "",
+        marca_campo_1: "",
+        marca_campo_2: "",
+        marca_campo_3: "",
+        marca_campo_4: "",
+        marca_campo_5: "",
+      });
+    }
+
+    return true;
+  } catch (error) {
+    logger.error("🔥 Erro ao enviar cotação via pedido", error);
+    throw error;
+  }
+}

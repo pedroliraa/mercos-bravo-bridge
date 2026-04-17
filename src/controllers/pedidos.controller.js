@@ -12,6 +12,7 @@ import {
   deleteNotaFromBravo,
 } from "../services/bravo.service.js";
 import { parseMercosPayload } from "../services/mercosParser.service.js";
+import { enviarCotacaoFromPedido } from "./orcamentos.controller.js";
 import logger from "../utils/logger.js";
 import { resolveSellerByMercosId } from "../services/sellerResolver.js";
 
@@ -68,7 +69,7 @@ async function garantirClienteExiste(dadosPedido) {
   const fakeReq = { body: clientePayload };
   const fakeRes = {
     status: () => ({
-      json: () => {}
+      json: () => { }
     })
   };
 
@@ -109,6 +110,20 @@ export async function handlePedidoWebhook(req, res) {
         eventId: integrationEvent._id,
         execute: async () => {
           logger.info(`🧪 [PEDIDOS] Processando: ${evento} | ID: ${dados?.id}`);
+
+          let situacaoCotacao = null;
+
+          if (evento === "pedido.gerado") {
+            situacaoCotacao = "GERADO";
+          }
+
+          if (evento === "pedido.faturado") {
+            situacaoCotacao = "FATURADO";
+          }
+
+          if (evento === "pedido.cancelado") {
+            situacaoCotacao = "CANCELADO";
+          }
 
           // ================= CANCELAMENTO =================
           if (evento === "pedido.cancelado") {

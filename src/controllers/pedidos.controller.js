@@ -12,36 +12,34 @@ import {
   deleteNotaFromBravo,
 } from "../services/bravo.service.js";
 import { parseMercosPayload } from "../services/mercosParser.service.js";
-import { enviarCotacaoFromPedido } from "./orcamentos.controller.js";
 import logger from "../utils/logger.js";
 import { resolveSellerByMercosId } from "../services/sellerResolver.js";
 
 // 🔥 IMPORTS NOVOS
-import Cliente from "../models/integrationClient.model.js"
+import Cliente from "../models/integrationClient.model.js";
 import { handleClienteWebhook } from "./clientes.controller.js";
+import { enviarCotacaoFromPedido } from "./orcamentos.controller.js";
 
 // ======================================================
-// 🔥 GARANTIR CLIENTE NO MONGO + BRAVO
+// 🔥 GARANTIR CLIENTE
 // ======================================================
 async function garantirClienteExiste(dadosPedido) {
   const cnpj = dadosPedido?.cliente_cnpj?.toString();
 
   if (!cnpj) {
-    logger.warn("⚠️ [PEDIDOS] Pedido sem CNPJ — pulando validação de cliente");
+    logger.warn("⚠️ [PEDIDOS] Pedido sem CNPJ");
     return null;
   }
 
-  // 🔎 busca no Mongo
   let cliente = await Cliente.findOne({ cnpj });
 
   if (cliente) {
-    logger.info(`✅ [PEDIDOS] Cliente já existe no Mongo | CNPJ=${cnpj}`);
+    logger.info(`✅ [PEDIDOS] Cliente já existe | CNPJ=${cnpj}`);
     return cliente;
   }
 
   logger.warn(`⚠️ [PEDIDOS] Cliente NÃO encontrado — criando | CNPJ=${cnpj}`);
 
-  // 🔥 monta payload compatível com controller de cliente
   const clientePayload = {
     evento: "cliente.cadastrado",
     dados: {
@@ -65,22 +63,14 @@ async function garantirClienteExiste(dadosPedido) {
     }
   };
 
-  // 🔥 simula request pro controller
   const fakeReq = { body: clientePayload };
-  const fakeRes = {
-    status: () => ({
-      json: () => { }
-    })
-  };
+  const fakeRes = { status: () => ({ json: () => {} }) };
 
   await handleClienteWebhook(fakeReq, fakeRes);
 
-  logger.info(`🎉 [PEDIDOS] Cliente criado via fluxo de clientes | CNPJ=${cnpj}`);
+  logger.info(`🎉 [PEDIDOS] Cliente criado via fluxo`);
 
-  // 🔄 busca novamente
-  cliente = await Cliente.findOne({ cnpj });
-
-  return cliente;
+  return await Cliente.findOne({ cnpj });
 }
 
 // ======================================================
@@ -97,6 +87,8 @@ export async function handlePedidoWebhook(req, res) {
     for (const item of eventos) {
       const { evento, dados } = item;
 
+      logger.info(`🔥 EVENTO RECEBIDO: ${evento}`);
+
       const integrationEvent = await IntegrationEvent.create({
         source: "mercos",
         entityType: "pedido",
@@ -111,22 +103,10 @@ export async function handlePedidoWebhook(req, res) {
         execute: async () => {
           logger.info(`🧪 [PEDIDOS] Processando: ${evento} | ID: ${dados?.id}`);
 
-          let situacaoCotacao = null;
-
-          if (evento === "pedido.gerado") {
-            situacaoCotacao = "GERADO";
-          }
-
-          if (evento === "pedido.faturado") {
-            situacaoCotacao = "FATURADO";
-          }
-
-          if (evento === "pedido.cancelado") {
-            situacaoCotacao = "CANCELADO";
-          }
-
           // ================= CANCELAMENTO =================
           if (evento === "pedido.cancelado") {
+            logger.info("🛑 [PEDIDOS] Cancelamento detectado");
+
             const codigoPedido = String(dados.id);
 
             await deleteNotaFromBravo({
@@ -141,14 +121,44 @@ export async function handlePedidoWebhook(req, res) {
               codigo_marca: "1",
             });
 
+            logger.info("📑 [PEDIDOS → ORCAMENTOS] Enviando CANCELADO");
+
+            try {
+              await enviarCotacaoFromPedido(dados, "CANCELADO");
+              logger.info("✅ Cotação CANCELADA enviada");
+            } catch (err) {
+              logger.error("❌ Erro cotação CANCELADA", err);
+            }
+
             results.push({ evento, pedido: "cancelado" });
             return;
           }
 
-          // ==================================================
-          // 🔥 GARANTE CLIENTE ANTES DE QUALQUER COISA
-          // ==================================================
+          // ================= CLIENTE =================
           await garantirClienteExiste(dados);
+
+          // ================= COTAÇÃO =================
+          if (evento === "pedido.gerado") {
+            logger.info("📑 Evento GERADO → enviando cotação");
+
+            try {
+              await enviarCotacaoFromPedido(dados, "GERADO");
+              logger.info("✅ Cotação GERADO enviada");
+            } catch (err) {
+              logger.error("❌ Erro cotação GERADO", err);
+            }
+          }
+
+          if (evento === "pedido.faturado") {
+            logger.info("📑 Evento FATURADO → enviando cotação");
+
+            try {
+              await enviarCotacaoFromPedido(dados, "FATURADO");
+              logger.info("✅ Cotação FATURADO enviada");
+            } catch (err) {
+              logger.error("❌ Erro cotação FATURADO", err);
+            }
+          }
 
           // ================= PEDIDO =================
           const pedidoMapeado = await mapPedidoMercosToBravo(evento, dados);
@@ -199,6 +209,7 @@ export async function handlePedidoWebhook(req, res) {
           // ================= NOTA =================
           if (evento === "pedido.faturado") {
             const notaMapeada = await handleNotaFromPedido(dados);
+
             if (notaMapeada) {
               await sendNotaToBravo(notaMapeada);
             }

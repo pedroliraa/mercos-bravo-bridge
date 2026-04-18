@@ -38,7 +38,7 @@ export default function mapPedidoMercosToBravoCotacao(
       ? String(pedido.total)
       : "0",
 
-    parcelas: pedido.condicao_pagamento || "",
+    parcelas: "",
     prazo: pedido.prazo_entrega || "",
 
     situacao: "ORCAMENTO",

@@ -323,19 +323,43 @@ export async function sendCotacoesToBravo(cotacoes) {
   try {
     logger.info(`[BRAVO] Enviando ${cotacoes.length} cotações`);
 
-    const { data } = await bravoApi.post(
+    const { data, status } = await bravoApi.post(
       "/api/v1/vw_bravo_cotacao",
       cotacoes
+    );
+
+    // 🔥 LOG DO STATUS HTTP
+    logger.info(`[BRAVO] Status HTTP: ${status}`);
+
+    // 🔥 LOG DA RESPOSTA (limitado pra não explodir log)
+    logger.info(
+      `[BRAVO] Resposta: ${
+        typeof data === "object"
+          ? JSON.stringify(data, null, 2).slice(0, 2000)
+          : data
+      }`
     );
 
     logger.info(`[BRAVO] Cotações enviadas com sucesso`);
 
     return data;
   } catch (error) {
-    logger.error(
-      "[BRAVO] Erro ao enviar cotações",
-      error.response?.data || error.message
-    );
+    logger.error("[BRAVO] Erro ao enviar cotações");
+
+    if (error.response) {
+      logger.error(`[BRAVO] Status erro: ${error.response.status}`);
+
+      logger.error(
+        `[BRAVO] Response erro: ${
+          typeof error.response.data === "object"
+            ? JSON.stringify(error.response.data, null, 2)
+            : error.response.data
+        }`
+      );
+    } else {
+      logger.error(`[BRAVO] Erro geral: ${error.message}`);
+    }
+
     throw error;
   }
 }

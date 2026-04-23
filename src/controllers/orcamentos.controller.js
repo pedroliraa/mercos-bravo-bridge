@@ -3,12 +3,10 @@ import {
 } from "../services/mercos.service.js";
 
 import {
-    sendCotacoesToBravo,
-    sendCotacaoItensToBravo
+    sendCotacoesToBravo
 } from "../services/bravo.service.js";
 
 import mapPedidoMercosToBravoCotacao from "../mappers/mapPedidoMercosToBravoCotacao.js";
-import mapItensParaCotacaoItemBravo from "../mappers/mapPedidoMercosToBravoCotacaoItem.js";
 
 import IntegrationEvent from "../models/integrationEvent.model.js";
 import { processIntegrationEvent } from "../processors/integration.processor.js";
@@ -17,20 +15,43 @@ import logger from "../utils/logger.js";
 import { resolveSellerByMercosId } from "../services/sellerResolver.js";
 import { sendMarcaToBravo } from "../services/bravo.service.js";
 
+// ======================================================
+// 🔥 HELPER DE DATA
+// ======================================================
 function getDateMinutesAgo(minutes) {
     const date = new Date();
     date.setMinutes(date.getMinutes() - minutes);
     return date.toISOString();
 }
 
+// ======================================================
+// 🔥 HELPER DE SITUAÇÃO (PADRÃO ÚNICO)
+// ======================================================
+function resolverSituacao(pedido) {
+    const status = String(pedido.status);
+
+    if (status === "0") return "CANCELADO";   // 🔥 CORREÇÃO PRINCIPAL
+    if (status === "3") return "FATURADO";
+    if (status === "2") return "GERADO";
+    if (status === "1") return "ORCAMENTO";
+
+    logger.info(
+        `🧠 DEBUG STATUS → ID=${pedido.id} | status=${pedido.status}`
+    );
+
+    return "ORCAMENTO";
+}
+
+// ======================================================
+// 🔥 CRON DE ORÇAMENTOS
+// ======================================================
 export async function handleWebhookOrcamentos(req, res) {
     try {
         logger.info("📑 [ORCAMENTOS] Cron iniciado");
 
-        const alteradoApos = getDateMinutesAgo(190); // 3 horas atrás
-        //const alteradoApos = "2026-01-01T00:00:00.000Z"; // <-- para testes, pega tudo
+        const alteradoApos = getDateMinutesAgo(190);
 
-        console.log(`[ORCAMENTOS] Buscando pedidos alterados após: ${alteradoApos}`);
+        logger.info(`[ORCAMENTOS] Buscando pedidos após: ${alteradoApos}`);
 
         const pedidos = await getPedidosComPaginacao(alteradoApos);
 
@@ -38,17 +59,17 @@ export async function handleWebhookOrcamentos(req, res) {
             return res.json({ message: "Nenhum pedido encontrado" });
         }
 
-        console.log(`[ORCAMENTOS] Payload Pedidos: ${JSON.stringify(pedidos, null, 2)}`);
-
-        const orcamentos = pedidos.filter(p => String(p.status) === "1");
-
-        if (!orcamentos.length) {
-            return res.json({ message: "Nenhum orçamento encontrado" });
-        }
+        logger.info(`[ORCAMENTOS] Total pedidos encontrados: ${pedidos.length}`);
 
         const results = [];
 
-        for (const pedido of orcamentos) {
+        for (const pedido of pedidos) {
+
+            const situacao = resolverSituacao(pedido);
+
+            logger.info(
+                `📊 [ORCAMENTOS] Pedido ${pedido.id} → situação: ${situacao}`
+            );
 
             const integrationEvent = await IntegrationEvent.create({
                 source: "mercos",
@@ -63,98 +84,21 @@ export async function handleWebhookOrcamentos(req, res) {
                 eventId: integrationEvent._id,
                 execute: async () => {
 
-                    logger.info(`📑 Processando orçamento ${pedido.id}`);
+                    try {
+                        await enviarCotacaoFromPedido(pedido, situacao);
 
-                    // 🔥 Buscar cliente para obter CNPJ
-                    let cnpj = "";
-
-                    /*if (pedido.cliente_id) {
-                        console.log(`[MERCOS] 🔹 Tentando buscar cliente para ID: ${pedido.cliente_id}`);
-
-                        let cliente;
-                        try {
-                            cliente = await getClienteById(pedido.cliente_id);
-                        } catch (err) {
-                            console.error(`[MERCOS] ❌ Erro ao buscar cliente ${pedido.cliente_id}:`, err.message);
-                            cliente = null;
-                        }
-
-                        if (!cliente) {
-                            console.warn(`[MERCOS] ⚠️ Cliente ${pedido.cliente_id} retornou vazio ou não existe`);
-                        } else {
-                            console.log(`[MERCOS] ✅ Cliente ${pedido.cliente_id} retornou:`, cliente);
-                        }
-
-                        const cnpj = cliente?.cnpj?.replace(/\D/g, "") || "";
-                        console.log(`[MERCOS] 📝 CNPJ processado: ${cnpj}`);
-                    }*/
-
-                    // 🔥 Mapear Cotação
-
-                    console.log(`[ORCAMENTOS] CNPJ do cliente: ${pedido.cliente_cnpj}`);
-
-                    const seller = pedido?.criador_id
-                        ? await resolveSellerByMercosId(pedido.criador_id)
-                        : null;
-
-
-                    // ================= VENDEDOR =================
-                    const codigoVendedorCRM = seller?.bravoSellerCode || "1";
-
-                    const cotacaoMapeada =
-                        mapPedidoMercosToBravoCotacao(pedido, codigoVendedorCRM);
-
-                    logger.info(
-                        `[ORCAMENTOS] Orçamento ${pedido.id} mapeado: ${JSON.stringify(cotacaoMapeada, null, 2)}`
-                    );
-
-                    // 🔥 Mapear Itens da Cotação
-                    // (aqui você precisa ter produtosMap previamente montado)
-                    const produtosMap = {}; // <-- preencher se necessário
-
-                    const itensMapeados =
-                        mapItensParaCotacaoItemBravo(pedido, produtosMap);
-
-                    logger.info(
-                        `[ORCAMENTOS] Orçamento ${pedido.id} mapeado. Itens mapeados: ${JSON.stringify(itensMapeados, null, 2)}`
-                    );
-
-                    // 🔥 Enviar Cotação
-                    await sendCotacoesToBravo([cotacaoMapeada]);
-
-                    // 🔥 Enviar Itens da Cotação
-                    if (itensMapeados.length) {
-                        await sendCotacaoItensToBravo(itensMapeados);
-                    }
-
-                    // ================= MARCA =================
-                    //const shouldSendMarca = tipo === "cotacao.enviada";
-
-                    if (pedido.cliente_cnpj) {
-                        await sendMarcaToBravo({
-                            codigo_cliente: pedido.cliente_cnpj.toString(),
-                            codigo_marca: "1",
-                            codigo_vendedor: codigoVendedorCRM,
-                            codigo_vendedor2: "",
-                            codigo_gestor: "",
-                            restricao: "",
-                            categoria_carteira: "",
-                            marca_campo_1: "",
-                            marca_campo_2: "",
-                            marca_campo_3: "",
-                            marca_campo_4: "",
-                            marca_campo_5: "",
+                        results.push({
+                            cotacao: pedido.id,
+                            status: situacao,
                         });
 
-                        logger.info(`🏷️ [ORÇAMENTOS] Marca enviada (evento: cotacao.enviada)`);
-                    } else {
-                        logger.info(`⏭️ [ORÇAMENTOS] Marca ignorada (evento: cotacao.enviada)`);
+                    } catch (err) {
+                        logger.error(
+                            `❌ [ORCAMENTOS] Erro ao enviar cotação ${pedido.id}`,
+                            err
+                        );
                     }
 
-                    results.push({
-                        cotacao: pedido.id,
-                        status: "enviado",
-                    });
                 },
             });
         }
@@ -166,7 +110,7 @@ export async function handleWebhookOrcamentos(req, res) {
         });
 
     } catch (error) {
-        logger.error("Erro ao sincronizar orçamentos", error);
+        logger.error("🔥 Erro no cron de orçamentos", error);
         return res.status(500).json({
             ok: false,
             error: "Erro ao sincronizar orçamentos",
@@ -174,50 +118,58 @@ export async function handleWebhookOrcamentos(req, res) {
     }
 }
 
+// ======================================================
+// 🔥 ENVIO DE COTAÇÃO (USADO PELO WEBHOOK E CRON)
+// ======================================================
 export async function enviarCotacaoFromPedido(pedido, situacaoCustom) {
-  try {
-    logger.info(`📑 [ORCAMENTOS] Recebido pedido ${pedido.id} para envio como cotação`);
+    try {
+        logger.info(
+            `📑 [ORCAMENTOS] Preparando envio | Pedido ${pedido.id} | Situação: ${situacaoCustom}`
+        );
 
-    const seller = pedido?.criador_id
-      ? await resolveSellerByMercosId(pedido.criador_id)
-      : null;
+        const seller = pedido?.criador_id
+            ? await resolveSellerByMercosId(pedido.criador_id)
+            : null;
 
-    const codigoVendedorCRM = seller?.bravoSellerCode || "1";
+        const codigoVendedorCRM = seller?.bravoSellerCode || "1";
 
-    let cotacaoMapeada =
-      mapPedidoMercosToBravoCotacao(pedido, codigoVendedorCRM);
+        let cotacaoMapeada =
+            mapPedidoMercosToBravoCotacao(pedido, codigoVendedorCRM);
 
-    // 🔥 AQUI É O PONTO PRINCIPAL
-    cotacaoMapeada.situacao = situacaoCustom;
+        // 🔥 SOBRESCREVE A SITUAÇÃO
+        cotacaoMapeada.situacao = situacaoCustom;
 
-    logger.info(
-      `[ORCAMENTOS] Cotação com situação ${situacaoCustom}: ${JSON.stringify(cotacaoMapeada, null, 2)}`
-    );
+        logger.info(
+            `[ORCAMENTOS] Payload final enviado: ${JSON.stringify(cotacaoMapeada, null, 2)}`
+        );
 
-    // 🔥 NÃO envia itens (como você pediu)
-    await sendCotacoesToBravo([cotacaoMapeada]);
+        // 🔥 ENVIA APENAS COTAÇÃO (SEM ITENS)
+        await sendCotacoesToBravo([cotacaoMapeada]);
 
-    // 🔥 Marca continua igual
-    if (pedido.cliente_cnpj) {
-      await sendMarcaToBravo({
-        codigo_cliente: pedido.cliente_cnpj.toString(),
-        codigo_marca: "1",
-        codigo_vendedor: codigoVendedorCRM,
-        codigo_vendedor2: "",
-        codigo_gestor: "",
-        restricao: "",
-        categoria_carteira: "",
-        marca_campo_1: "",
-        marca_campo_2: "",
-        marca_campo_3: "",
-        marca_campo_4: "",
-        marca_campo_5: "",
-      });
+        // 🔥 ENVIA MARCA
+        if (pedido.cliente_cnpj) {
+            await sendMarcaToBravo({
+                codigo_cliente: pedido.cliente_cnpj.toString(),
+                codigo_marca: "1",
+                codigo_vendedor: codigoVendedorCRM,
+                codigo_vendedor2: "",
+                codigo_gestor: "",
+                restricao: "",
+                categoria_carteira: "",
+                marca_campo_1: "",
+                marca_campo_2: "",
+                marca_campo_3: "",
+                marca_campo_4: "",
+                marca_campo_5: "",
+            });
+        }
+
+        logger.info(`✅ [ORCAMENTOS] Cotação enviada com sucesso`);
+
+        return true;
+
+    } catch (error) {
+        logger.error("🔥 Erro ao enviar cotação via pedido", error);
+        throw error;
     }
-
-    return true;
-  } catch (error) {
-    logger.error("🔥 Erro ao enviar cotação via pedido", error);
-    throw error;
-  }
 }

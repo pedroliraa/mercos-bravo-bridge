@@ -13,7 +13,7 @@ function getCodigoFilialByRepresentada(representadaId) {
   }
 }
 
-export function mapNotaItemMercosToBravo(itemEasy, pedido) {
+export function mapNotaItemMercosToBravo(itemEasy, pedido, produto) {
   if (!itemEasy) return null;
 
   const qtd = Number(itemEasy.quantidade || 0);
@@ -27,8 +27,13 @@ export function mapNotaItemMercosToBravo(itemEasy, pedido) {
     item: String(itemEasy.pk || "1").padStart(5, "0"), // Bravo espera 5 dígitos muitas vezes
 
     codigo_produto: String(itemEasy.fk_produto || ""),
-    grupo_produto: "GRUPO 1",
-    descricao_produto: itemEasy.produto || "Produto " + (itemEasy.fk_produto || "sem código"),
+    grupo_produto:
+      produto?.grupo || "SEM GRUPO",
+    descricao_produto:
+      produto?.descricao_nf ||
+      produto?.descricao ||
+      itemEasy.infadprod ||
+      `Produto ${itemEasy.fk_produto || "sem código"}`,
 
     ncm: itemEasy.ncm || "00000000",
     cst: itemEasy.cst || "00",

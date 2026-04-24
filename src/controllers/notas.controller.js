@@ -12,6 +12,7 @@ import {
   sendNotaItensToBravo,
 } from "../services/bravo.service.js";
 import logger from "../utils/logger.js";
+import { consultarProdutosPorIds } from "../services/easydata.service.js";
 
 export async function handleNotaFromPedido(pedido) {
   if (!pedido || !pedido.id) {
@@ -51,13 +52,29 @@ export async function handleNotaFromPedido(pedido) {
         fkFaturamento
       );
 
+      const produtosIds = [
+        ...new Set(itensEasyData.map(i => i.fk_produto).filter(Boolean))
+      ];
+
+      const produtos = await consultarProdutosPorIds(
+        pedido.representada_id,
+        produtosIds
+      );
+
+      //map de produtos por ID para fácil acesso
+      const produtosMap = new Map(
+        produtos.map(p => [p.pk, p])
+      );
+
       notaMapeada = await mapNotaMercosToBravo(pedido, faturamento);
 
       if (notaMapeada.codigo_filial === "1" || notaMapeada.codigo_filial === "2") {
 
         itensMapeados = itensEasyData
-          .map((item) => mapNotaItemMercosToBravo(item, pedido))
-          .filter(Boolean);
+          .map((item) => {
+            const produto = produtosMap.get(item.fk_produto);
+            return mapNotaItemMercosToBravo(item, pedido, produto);
+          })
 
       }
 

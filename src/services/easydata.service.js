@@ -153,3 +153,33 @@ export async function consultarFaturamentoItens(representadaId, fkFaturamento) {
         throw err;
     }
 }
+
+// Função para consultar Produtos por ID, retornando a descrição e o grupo
+export async function consultarProdutosPorIds(representadaId, produtosIds) {
+    if (!produtosIds || produtosIds.length === 0) return [];
+
+    try {
+        const config = getEasyDataConfig(representadaId);
+
+        const payload = {
+            select: ["pk", "descricao", "grupo", "descricao_nf"],
+            where: {
+                pk: {
+                    values: produtosIds,
+                    operator: "in",
+                    logic: "AND"
+                }
+            },
+            where_logic: "AND",
+            limit: produtosIds.length,
+            offset: 0
+        };
+
+        const response = await axios.post('/read/produto', payload, config);
+        return response.data.result || [];
+
+    } catch (err) {
+        logger.error(`🔥 Erro ao consultar produtos: ${err.message}`);
+        throw err;
+    }
+}

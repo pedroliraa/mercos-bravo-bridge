@@ -146,7 +146,7 @@ export default async function mapPedidoMercosToBravo(evento, pedido) {
 
     observacoes_pedido: pedido.observacoes || "",
 
-    pedido_campo_1: tipoPedidoDescricao,
+    pedido_campo_1: "",
     pedido_campo_2: "",
     pedido_campo_3: "",
     pedido_campo_4: "",

@@ -20,10 +20,22 @@ function getCodigoFilialByRepresentada(representadaId) {
 }
 
 // ======================================================
-// REGRA: CONSIDERAR VENDA
+// REGRA NOVA: BASEADA NA CONDIÇÃO DE PAGAMENTO
 // ======================================================
-function isVenda(tipoPedidoId) {
-  return tipoPedidoId == null;
+function getTipoPedidoByCondicao(condicaoPagamento = "") {
+  const condicao = condicaoPagamento.toUpperCase();
+
+  if (condicao.includes("BONIFICA")) return "BONIFICACAO";
+  if (condicao.includes("CONSIGNA")) return "CONSIGNACAO";
+  if (condicao.includes("DEVOLU")) return "DEVOLUCAO";
+  if (condicao.includes("MOSTRU")) return "MOSTRUARIO";
+  if (condicao.includes("TROCA")) return "TROCA";
+
+  return "VENDA";
+}
+
+function isVendaByCondicao(condicaoPagamento) {
+  return getTipoPedidoByCondicao(condicaoPagamento) === "VENDA";
 }
 
 // ======================================================
@@ -58,8 +70,13 @@ export default async function mapPedidoMercosToBravo(evento, pedido) {
     );
   }
 
-  // ✅ DEFINE ANTES (pra usar no payload e no log)
-  const considerarVenda = isVenda(pedido.tipo_pedido_id);
+  // ✅ NOVA REGRA AQUI
+  const condicaoPagamento = pedido.condicao_pagamento || "";
+  const tipoPedidoDescricao = condicaoPagamento;
+
+  const considerarVenda = isVendaByCondicao(
+    pedido.condicao_pagamento
+  );
 
   const payload = {
     codigo_filial: getCodigoFilialByRepresentada(pedido.representada_id),
@@ -71,7 +88,6 @@ export default async function mapPedidoMercosToBravo(evento, pedido) {
       ? String(pedido.cliente_cnpj)
       : null,
 
-    // 🎯 VENDEDOR
     codigo_vendedor: seller?.bravoSellerCode || "1",
 
     data_pedido:
@@ -125,11 +141,12 @@ export default async function mapPedidoMercosToBravo(evento, pedido) {
         ? "Faturado"
         : "Aberto",
 
+    // 🔥 REGRA FINAL
     considerar_venda: considerarVenda ? "true" : "false",
 
     observacoes_pedido: pedido.observacoes || "",
 
-    pedido_campo_1: "",
+    pedido_campo_1: tipoPedidoDescricao,
     pedido_campo_2: "",
     pedido_campo_3: "",
     pedido_campo_4: "",
@@ -137,7 +154,7 @@ export default async function mapPedidoMercosToBravo(evento, pedido) {
   };
 
   logger.info(
-    `📊 [MAPPER_PEDIDO] Tipo pedido | tipo_pedido_id=${pedido.tipo_pedido_id} | considerar_venda=${considerarVenda}`
+    `📊 [MAPPER_PEDIDO] Condição=${pedido.condicao_pagamento} | tipo=${tipoPedidoDescricao} | considerar_venda=${considerarVenda}`
   );
 
   return payload;

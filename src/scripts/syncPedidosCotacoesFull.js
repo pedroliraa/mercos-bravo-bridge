@@ -17,7 +17,11 @@ import { resolveSellerByMercosId } from "../services/sellerResolver.js";
 // ======================================================
 
 const DATA_INICIO = "2026-02-01T00:00:00.000Z";
-const DELAY_MS = 200;
+const DELAY_MS = 400; // aumentei pra aliviar API
+const RETRY_MAX = 3;
+
+// RHPE → começar do 294
+const START_INDEX_RHPE = 293;
 
 // ======================================================
 // 🔥 HELPERS
@@ -44,11 +48,10 @@ function resolverSituacao(pedido) {
 }
 
 // ======================================================
-// 🔥 TOKENS POR EMPRESA
+// 🔥 TOKENS (ATLANTIS REMOVIDO)
 // ======================================================
 
 const TOKENS = {
-  ATLANTIS: env.MERCOS_COMPANY_TOKEN_ATLANTIS,
   RHPE: env.MERCOS_COMPANY_TOKEN_RHPE,
   ATOMY: env.MERCOS_COMPANY_TOKEN_ATOMY,
   ANKORFIT: env.MERCOS_COMPANY_TOKEN_ANKORFIT
@@ -64,18 +67,10 @@ async function fetchPedidosEmpresa(nome, token, alteradoApos) {
   let todos = [];
   let continuar = true;
   let ultimaData = alteradoApos;
-  let loop = 0;
 
   const dataLimite = new Date(alteradoApos);
 
   while (continuar) {
-    loop++;
-
-    if (loop > 50) {
-      logger.warn(`⚠️ Loop interrompido (${nome})`);
-      break;
-    }
-
     try {
       const params = {
         alterado_apos: formatMercosDate(ultimaData)
@@ -100,8 +95,6 @@ async function fetchPedidosEmpresa(nome, token, alteradoApos) {
       const ultimaAlteracao = data[data.length - 1]?.ultima_alteracao;
       if (!ultimaAlteracao) break;
 
-      if (new Date(ultimaAlteracao) < new Date(ultimaData)) break;
-
       ultimaData = ultimaAlteracao;
       continuar = headers["meuspedidos_limitou_registros"] == 1;
 
@@ -111,58 +104,49 @@ async function fetchPedidosEmpresa(nome, token, alteradoApos) {
     }
   }
 
-  logger.info(`✅ ${nome}: ${todos.length} pedidos válidos`);
+  logger.info(`✅ ${nome}: ${todos.length} pedidos`);
   return todos;
 }
 
 // ======================================================
-// 🔥 SELLER RESOLVER INTELIGENTE
+// 🔥 SELLER (COM FALLBACK SAFE)
 // ======================================================
 
 async function resolverSellerInteligente(pedido) {
-  let codigoVendedor = "1";
-
-  if (!pedido?.criador_id) return codigoVendedor;
-
-  // 1️⃣ Mongo
   try {
+    if (!pedido?.criador_id) return "1";
+
     const sellerMongo = await resolveSellerByMercosId(pedido.criador_id);
 
     if (sellerMongo?.bravoSellerCode) {
       return sellerMongo.bravoSellerCode;
     }
 
-    throw new Error("Sem código no Mongo");
-
-  } catch (errMongo) {
-    logger.warn(
-      `⚠️ Seller não encontrado no Mongo | pedido=${pedido.id} | tentando Mercos`
-    );
+  } catch (err) {
+    logger.warn(`⚠️ Mongo falhou (seller), usando fallback`);
   }
 
-  // 2️⃣ Mercos API
-  try {
-    const token = TOKENS[pedido.empresa];
-    const mercosApi = createMercosApi(token);
+  return "1"; // fallback seguro
+}
 
-    const { data } = await mercosApi.get(
-      `/v1/usuarios/${pedido.criador_id}`
-    );
+// ======================================================
+// 🔥 RETRY WRAPPER
+// ======================================================
 
-    if (data?.id) {
-      logger.info(
-        `✅ Seller encontrado no Mercos | id=${data.id} | nome=${data.nome}`
-      );
-      return "1"; // ou mapear futuramente
+async function retry(fn, label) {
+  for (let i = 1; i <= RETRY_MAX; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      logger.warn(`⚠️ Retry ${i}/${RETRY_MAX} falhou (${label})`);
+
+      if (i === RETRY_MAX) {
+        throw err;
+      }
+
+      await sleep(1000 * i);
     }
-
-  } catch (errMercos) {
-    logger.warn(
-      `❌ Seller não encontrado nem no Mongo nem no Mercos | pedido=${pedido.id}`
-    );
   }
-
-  return codigoVendedor;
 }
 
 // ======================================================
@@ -187,13 +171,19 @@ async function processPedido(pedido, index, total) {
 
     cotacao.situacao = situacao;
 
-    await sendCotacoesToBravo([cotacao]);
+    await retry(
+      () => sendCotacoesToBravo([cotacao]),
+      "cotacao"
+    );
 
     // ================= PEDIDO =================
     const pedidoMap = await mapPedidoMercosToBravo("sync", pedido);
 
     if (pedidoMap) {
-      await sendPedidoToBravo(pedidoMap);
+      await retry(
+        () => sendPedidoToBravo(pedidoMap),
+        "pedido"
+      );
     }
 
     await sleep(DELAY_MS);
@@ -212,14 +202,9 @@ async function processPedido(pedido, index, total) {
 
 (async () => {
   try {
-    logger.info("🚀 INICIANDO BACKFILL");
+    logger.info("🚀 INICIANDO BACKFILL AJUSTADO");
 
-    const empresas = [
-      "ATLANTIS",
-      "RHPE",
-      "ATOMY",
-      "ANKORFIT"
-    ];
+    const empresas = ["RHPE", "ATOMY", "ANKORFIT"];
 
     for (const nome of empresas) {
       const token = TOKENS[nome];
@@ -235,22 +220,27 @@ async function processPedido(pedido, index, total) {
 
       if (!pedidos.length) continue;
 
-      // 🔥 ORDENAÇÃO POR DATA
       pedidos.sort(
         (a, b) =>
           new Date(a.ultima_alteracao) -
           new Date(b.ultima_alteracao)
       );
 
-      logger.info(
-        `📊 ${nome} | ${pedidos[0]?.ultima_alteracao} → ${pedidos[pedidos.length - 1]?.ultima_alteracao}`
-      );
+      let pedidosFiltrados = pedidos;
+
+      // 🔥 AJUSTE RHPE → pular até 293
+      if (nome === "RHPE") {
+        pedidosFiltrados = pedidos.slice(START_INDEX_RHPE);
+        logger.warn(
+          `⏭️ RHPE pulando primeiros ${START_INDEX_RHPE} pedidos`
+        );
+      }
 
       let count = 0;
 
-      for (const pedido of pedidos) {
+      for (const pedido of pedidosFiltrados) {
         count++;
-        await processPedido(pedido, count, pedidos.length);
+        await processPedido(pedido, count, pedidosFiltrados.length);
       }
 
       logger.info(`✅ ${nome} FINALIZADA\n`);

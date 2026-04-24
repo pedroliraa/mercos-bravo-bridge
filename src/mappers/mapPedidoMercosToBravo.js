@@ -10,13 +10,20 @@ function getCodigoFilialByRepresentada(representadaId) {
       return "1"; // Matriz
     case 382701:
       return "2"; // Filial
-    case 424288: 
+    case 424288:
       return "3"; // Atomy
     case 424289:
       return "4"; // Ankorfit
     default:
       return "1";
   }
+}
+
+// ======================================================
+// REGRA: CONSIDERAR VENDA
+// ======================================================
+function isVenda(tipoPedidoId) {
+  return tipoPedidoId == null;
 }
 
 // ======================================================
@@ -29,7 +36,7 @@ export default async function mapPedidoMercosToBravo(evento, pedido) {
   }
 
   logger.info(
-    `🧾 [MAPPER_PEDIDO] Iniciando mapeamento do pedido | id=${pedido.id} | evento=${evento}`
+    `🧾 [MAPPER_PEDIDO] Iniciando mapeamento | id=${pedido.id} | evento=${evento}`
   );
 
   // 🔑 RESOLVE VENDEDOR
@@ -51,6 +58,9 @@ export default async function mapPedidoMercosToBravo(evento, pedido) {
     );
   }
 
+  // ✅ DEFINE ANTES (pra usar no payload e no log)
+  const considerarVenda = isVenda(pedido.tipo_pedido_id);
+
   const payload = {
     codigo_filial: getCodigoFilialByRepresentada(pedido.representada_id),
 
@@ -61,7 +71,7 @@ export default async function mapPedidoMercosToBravo(evento, pedido) {
       ? String(pedido.cliente_cnpj)
       : null,
 
-    // 🎯 VENDEDOR UNIFICADO
+    // 🎯 VENDEDOR
     codigo_vendedor: seller?.bravoSellerCode || "1",
 
     data_pedido:
@@ -115,7 +125,7 @@ export default async function mapPedidoMercosToBravo(evento, pedido) {
         ? "Faturado"
         : "Aberto",
 
-    considerar_venda: "S",
+    considerar_venda: considerarVenda ? "true" : "false",
 
     observacoes_pedido: pedido.observacoes || "",
 
@@ -127,7 +137,7 @@ export default async function mapPedidoMercosToBravo(evento, pedido) {
   };
 
   logger.info(
-    `📦 [MAPPER_PEDIDO] Payload gerado | codigo_pedido=${payload.codigo_pedido} | codigo_vendedor=${payload.codigo_vendedor} | codigo_filial=${payload.codigo_filial}`
+    `📊 [MAPPER_PEDIDO] Tipo pedido | tipo_pedido_id=${pedido.tipo_pedido_id} | considerar_venda=${considerarVenda}`
   );
 
   return payload;

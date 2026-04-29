@@ -175,7 +175,7 @@ export async function consultarProdutosPorIds(representadaId, produtosIds) {
             offset: 0
         };
 
-        const response = await axios.post('/read/produto', payload, config);
+        const response = await axios.post('/read/produtos', payload, config);
         return response.data.result || [];
 
     } catch (err) {

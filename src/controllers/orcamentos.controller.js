@@ -28,15 +28,28 @@ function getDateMinutesAgo(minutes) {
 // 🔥 HELPER DE SITUAÇÃO (PADRÃO ÚNICO)
 // ======================================================
 function resolverSituacao(pedido) {
-    const status = String(pedido.status);
 
-    if (status === "0") return "CANCELADO";   // 🔥 CORREÇÃO PRINCIPAL
-    if (status === "3") return "FATURADO";
-    if (status === "2") return "GERADO";
-    if (status === "1") return "ORCAMENTO";
+    const status = String(pedido.status);
+    const faturamento = String(pedido.status_faturamento);
+
+    if (status === "0") {
+        return "CANCELADO";
+    }
+
+    if (status === "1") {
+        return "ORCAMENTO";
+    }
+
+    if (status === "2" && faturamento === "2") {
+        return "FATURADO";
+    }
+
+    if (status === "2") {
+        return "GERADO";
+    }
 
     logger.info(
-        `🧠 DEBUG STATUS → ID=${pedido.id} | status=${pedido.status}`
+        `🧠 DEBUG STATUS → ID=${pedido.id} | status=${pedido.status} | faturamento=${pedido.status_faturamento}`
     );
 
     return "ORCAMENTO";

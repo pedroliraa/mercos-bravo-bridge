@@ -17,7 +17,13 @@ function formatMercosDate(date) {
 }
 
 // 🔥 Helper robusto de paginação
-async function fetchComPaginacao({ endpoint, companyToken, alteradoApos }) {
+async function fetchComPaginacao({
+    endpoint,
+    companyToken,
+    alteradoApos,
+    status
+}) {
+
     if (!companyToken) {
         logger.warn(`[MERCOS] Token não informado para ${endpoint} — pulando`);
         return [];
@@ -31,6 +37,7 @@ async function fetchComPaginacao({ endpoint, companyToken, alteradoApos }) {
     let loopProtecao = 0;
 
     while (continuar) {
+
         loopProtecao++;
 
         if (loopProtecao > 50) {
@@ -41,14 +48,20 @@ async function fetchComPaginacao({ endpoint, companyToken, alteradoApos }) {
         }
 
         try {
+
             const params = {};
 
             if (ultimaData) {
                 params.alterado_apos = formatMercosDate(ultimaData);
             }
 
+            // 🔥 NOVO
+            if (status !== undefined) {
+                params.status = status;
+            }
+
             logger.info(
-                `[MERCOS] GET ${endpoint} | alterado_apos=${params.alterado_apos || "N/A"}`
+                `[MERCOS] GET ${endpoint} | status=${status ?? "N/A"} | alterado_apos=${params.alterado_apos || "N/A"}`
             );
 
             const response = await mercosApi.get(endpoint, {
@@ -59,9 +72,11 @@ async function fetchComPaginacao({ endpoint, companyToken, alteradoApos }) {
             const { data, headers } = response;
 
             if (Array.isArray(data) && data.length > 0) {
+
                 todosRegistros.push(...data);
 
-                const ultimaAlteracao = data[data.length - 1]?.ultima_alteracao;
+                const ultimaAlteracao =
+                    data[data.length - 1]?.ultima_alteracao;
 
                 if (!ultimaAlteracao) {
                     logger.warn(
@@ -71,6 +86,7 @@ async function fetchComPaginacao({ endpoint, companyToken, alteradoApos }) {
                 }
 
                 ultimaData = ultimaAlteracao;
+
             } else {
                 continuar = false;
             }
@@ -80,23 +96,33 @@ async function fetchComPaginacao({ endpoint, companyToken, alteradoApos }) {
             continuar = limitou == 1;
 
         } catch (err) {
+
             logger.error(`[MERCOS] Erro ao buscar ${endpoint}`);
 
             if (err.response) {
+
                 logger.error(`Status: ${err.response.status}`);
+
                 logger.error(
                     `Headers: ${JSON.stringify(err.response.headers, null, 2)}`
                 );
 
                 if (typeof err.response.data === "object") {
+
                     logger.error(
                         `Data (JSON): ${JSON.stringify(err.response.data, null, 2)}`
                     );
+
                 } else {
+
                     logger.error(`Data (RAW): ${err.response.data}`);
+
                 }
+
             } else {
+
                 logger.error(`Erro sem response: ${err.message}`);
+
             }
 
             break;
@@ -108,6 +134,7 @@ async function fetchComPaginacao({ endpoint, companyToken, alteradoApos }) {
 
 // ✅ FUNÇÃO CORRIGIDA (SUPORTA 4 EMPRESAS)
 export async function getMercosSellerById(id) {
+
     logger.info(`[MERCOS] Buscando vendedor no Mercos | id=${id}`);
 
     const empresas = [
@@ -118,6 +145,7 @@ export async function getMercosSellerById(id) {
     ];
 
     for (const empresaObj of empresas) {
+
         const { nome, token } = empresaObj;
 
         if (!token) {
@@ -128,6 +156,7 @@ export async function getMercosSellerById(id) {
         const mercosApi = createMercosApi(token);
 
         try {
+
             const { data } = await mercosApi.get(`/v1/usuarios/${id}`);
 
             logger.info(
@@ -140,10 +169,13 @@ export async function getMercosSellerById(id) {
             };
 
         } catch (err) {
+
             if (err.response?.status === 404 || err.response?.status === 401) {
+
                 logger.warn(
                     `[MERCOS] Não encontrado na ${nome} — tentando próxima`
                 );
+
                 continue;
             }
 
@@ -165,6 +197,7 @@ export async function getMercosSellerById(id) {
 
 // ================= TITULOS =================
 export async function getTitulosComPaginacao(alteradoApos) {
+
     const empresas = [
         { nome: "ATLANTIS", token: env.MERCOS_COMPANY_TOKEN_ATLANTIS },
         { nome: "RHPE", token: env.MERCOS_COMPANY_TOKEN_RHPE },
@@ -175,6 +208,7 @@ export async function getTitulosComPaginacao(alteradoApos) {
     let todosTitulos = [];
 
     for (const empresa of empresas) {
+
         const titulos = await fetchComPaginacao({
             endpoint: "/v1/titulos",
             companyToken: empresa.token,
@@ -197,7 +231,11 @@ export async function getTitulosComPaginacao(alteradoApos) {
 }
 
 // ================= PEDIDOS =================
-export async function getPedidosComPaginacao(alteradoApos) {
+export async function getPedidosComPaginacao(
+    alteradoApos,
+    status = 1
+) {
+
     const empresas = [
         { nome: "ATLANTIS", token: env.MERCOS_COMPANY_TOKEN_ATLANTIS },
         { nome: "RHPE", token: env.MERCOS_COMPANY_TOKEN_RHPE },
@@ -208,13 +246,17 @@ export async function getPedidosComPaginacao(alteradoApos) {
     let todosPedidos = [];
 
     for (const empresa of empresas) {
+
         const pedidos = await fetchComPaginacao({
             endpoint: "/v2/pedidos",
             companyToken: empresa.token,
-            alteradoApos
+            alteradoApos,
+            status
         });
 
-        logger.info(`[MERCOS] ${empresa.nome} pedidos: ${pedidos.length}`);
+        logger.info(
+            `[MERCOS] ${empresa.nome} pedidos status=${status}: ${pedidos.length}`
+        );
 
         todosPedidos.push(
             ...pedidos.map(p => ({
@@ -231,6 +273,7 @@ export async function getPedidosComPaginacao(alteradoApos) {
 
 // ================= CLIENTES =================
 export async function getClientesComPaginacao(companyToken, alteradoApos) {
+
     if (!alteradoApos) {
         const date = new Date();
         date.setMonth(date.getMonth() - 24);

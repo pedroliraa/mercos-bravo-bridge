@@ -23,11 +23,23 @@ const credentials = {
 
 function getEasyDataConfig(representadaId) {
     const empresa = representadaId === 376068 ? 'atlanti' : 'rhpe';
+
+    logger.info(
+        `[EASYDATA] representadaId=${representadaId} -> empresa=${empresa}`
+    );
+
     const { workspace, usuario, senha } = credentials[empresa];
+
+    logger.info(
+        `[EASYDATA] workspace=${workspace}`
+    );
 
     return {
         baseURL: `${EASYDATA_BASE_URL}/${workspace}`,
-        auth: { username: usuario, password: senha },
+        auth: {
+            username: usuario,
+            password: senha
+        },
         headers: {
             'x-api-key': credentials[empresa]['x-api-key'],
             'Content-Type': 'application/json'
@@ -162,18 +174,28 @@ export async function consultarProdutosPorIds(representadaId, produtosIds) {
         const config = getEasyDataConfig(representadaId);
 
         const payload = {
-            select: ["pk", "descricao", "grupo", "descricao_nf"],
-            where: {
-                pk: {
-                    values: produtosIds,
-                    operator: "in",
-                    logic: "AND"
-                }
-            },
-            where_logic: "AND",
-            limit: produtosIds.length,
-            offset: 0
-        };
+    select: ["pk", "descricao", "grupo", "descricao_nf"],
+
+    where: {
+        pk: {
+            values: produtosIds,
+            operator: "in",
+            logic: "AND"
+        }
+    },
+
+    where_logic: "AND",
+
+    order_by: [
+        {
+            column: "pk",
+            direction: "asc"
+        }
+    ],
+
+    limit: produtosIds.length,
+    offset: 0
+};
 
         const response = await axios.post('/read/produtos', payload, config);
         return response.data.result || [];

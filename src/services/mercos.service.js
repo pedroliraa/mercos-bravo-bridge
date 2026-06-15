@@ -140,8 +140,8 @@ export async function getMercosSellerById(id) {
     const empresas = [
         { nome: "filial", token: env.MERCOS_COMPANY_TOKEN_RHPE },
         { nome: "matriz", token: env.MERCOS_COMPANY_TOKEN_ATLANTIS },
-        { nome: "atomy", token: env.MERCOS_COMPANY_TOKEN_ATOMY },
-        { nome: "ankorfit", token: env.MERCOS_COMPANY_TOKEN_ANKORFIT }
+        { nome: "atomy", token: env.MERCOS_COMPANY_TOKEN_ATOMY }/*,
+        { nome: "ankorfit", token: env.MERCOS_COMPANY_TOKEN_ANKORFIT }*/
     ];
 
     for (const empresaObj of empresas) {
@@ -201,8 +201,8 @@ export async function getTitulosComPaginacao(alteradoApos) {
     const empresas = [
         { nome: "ATLANTIS", token: env.MERCOS_COMPANY_TOKEN_ATLANTIS },
         { nome: "RHPE", token: env.MERCOS_COMPANY_TOKEN_RHPE },
-        { nome: "ATOMY", token: env.MERCOS_COMPANY_TOKEN_ATOMY },
-        { nome: "ANKORFIT", token: env.MERCOS_COMPANY_TOKEN_ANKORFIT }
+        { nome: "ATOMY", token: env.MERCOS_COMPANY_TOKEN_ATOMY }/*,
+        { nome: "ANKORFIT", token: env.MERCOS_COMPANY_TOKEN_ANKORFIT }*/
     ];
 
     let todosTitulos = [];
@@ -239,8 +239,8 @@ export async function getPedidosComPaginacao(
     const empresas = [
         { nome: "ATLANTIS", token: env.MERCOS_COMPANY_TOKEN_ATLANTIS },
         { nome: "RHPE", token: env.MERCOS_COMPANY_TOKEN_RHPE },
-        { nome: "ATOMY", token: env.MERCOS_COMPANY_TOKEN_ATOMY },
-        { nome: "ANKORFIT", token: env.MERCOS_COMPANY_TOKEN_ANKORFIT }
+        { nome: "ATOMY", token: env.MERCOS_COMPANY_TOKEN_ATOMY }/*,
+        { nome: "ANKORFIT", token: env.MERCOS_COMPANY_TOKEN_ANKORFIT }*/
     ];
 
     let todosPedidos = [];
@@ -288,9 +288,8 @@ export async function getClientesComPaginacao(companyToken, alteradoApos) {
         empresaNome = "ATLANTIS";
     } else if (companyToken === env.MERCOS_COMPANY_TOKEN_ATOMY) {
         empresaNome = "ATOMY";
-    } else if (companyToken === env.MERCOS_COMPANY_TOKEN_ANKORFIT) {
-        empresaNome = "ANKORFIT";
-    }
+    } /*else if (companyToken === env.MERCOS_COMPANY_TOKEN_ANKORFIT) {
+        empresaNome = "ANKORFIT";}*/ 
 
     const clientes = await fetchComPaginacao({
         endpoint: "/v1/clientes",

@@ -157,12 +157,27 @@ export async function enviarCotacaoFromPedido(pedido, situacaoCustom) {
         );
 
         // 🔥 ENVIA APENAS COTAÇÃO (SEM ITENS)
+        if (!cotacaoMapeada?.codigo_cliente) {
+            logger.warn(
+                `⚠️ [ORCAMENTOS] Cotação ${pedido.id} ignorada: sem codigo_cliente`
+            );
+
+            return false;
+        }
+
         await sendCotacoesToBravo([cotacaoMapeada]);
 
         // 🔥 ENVIA MARCA
-        if (pedido.cliente_cnpj) {
+        const codigoCliente = pedido.cliente_cnpj?.toString();
+
+        if (!codigoCliente) {
+            logger.warn(
+                `⚠️ [ORCAMENTOS] Marca ignorada na cotação ${pedido.id}: sem codigo_cliente`
+            );
+        } else {
+
             await sendMarcaToBravo({
-                codigo_cliente: pedido.cliente_cnpj.toString(),
+                codigo_cliente: codigoCliente,
                 codigo_marca: "1",
                 codigo_vendedor: codigoVendedorCRM,
                 codigo_vendedor2: "",
@@ -173,8 +188,9 @@ export async function enviarCotacaoFromPedido(pedido, situacaoCustom) {
                 marca_campo_2: "",
                 marca_campo_3: "",
                 marca_campo_4: "",
-                marca_campo_5: "",
+                marca_campo_5,
             });
+
         }
 
         logger.info(`✅ [ORCAMENTOS] Cotação enviada com sucesso`);

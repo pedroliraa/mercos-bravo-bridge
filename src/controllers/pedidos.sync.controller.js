@@ -84,7 +84,7 @@ async function garantirClienteExiste(dadosPedido) {
   };
 
   const fakeReq = { body: clientePayload };
-  const fakeRes = { status: () => ({ json: () => {} }) };
+  const fakeRes = { status: () => ({ json: () => { } }) };
 
   await handleClienteWebhook(fakeReq, fakeRes);
 
@@ -159,8 +159,12 @@ export async function syncPedidosAlterados(req, res) {
               pedido
             );
 
-          if (pedidoMapeado) {
+          if (pedidoMapeado?.codigo_cliente) {
             await sendPedidoToBravo(pedidoMapeado);
+          } else {
+            logger.warn(
+              `⚠️ [PEDIDOS_SYNC] Pedido ${pedido.id} ignorado: sem codigo_cliente`
+            );
           }
 
           // ================= ITENS =================
@@ -188,7 +192,11 @@ export async function syncPedidosAlterados(req, res) {
             pedidoMapeado?.codigo_cliente ||
             pedido.cliente_cnpj?.toString();
 
-          if (codigoCliente) {
+          if (!codigoCliente) {
+            logger.warn(
+              `⚠️ [PEDIDOS_SYNC] Marca ignorada no pedido ${pedido.id}: sem codigo_cliente`
+            );
+          } else {
 
             await sendMarcaToBravo({
               codigo_cliente: codigoCliente,

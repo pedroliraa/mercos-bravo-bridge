@@ -188,7 +188,7 @@ export async function enviarCotacaoFromPedido(pedido, situacaoCustom) {
                 marca_campo_2: "",
                 marca_campo_3: "",
                 marca_campo_4: "",
-                marca_campo_5,
+                marca_campo_5: "",
             });
 
         }

@@ -1,2 +1,6 @@
 node_modules
 .env
+\scripts
+
+debug-cancelados.json
+debug-pedidos-cancelamento.json

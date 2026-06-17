@@ -2,6 +2,7 @@ import { env } from "../config/env.js";
 import logger from "../utils/logger.js";
 import createMercosApi from "./mercosApi.js";
 
+
 /**
  * Formata data no padrão aceito pela API v2 da Mercos:
  * YYYY-MM-DD HH:mm:ss
@@ -233,7 +234,7 @@ export async function getTitulosComPaginacao(alteradoApos) {
 // ================= PEDIDOS =================
 export async function getPedidosComPaginacao(
     alteradoApos,
-    status = 1
+    status
 ) {
 
     const empresas = [

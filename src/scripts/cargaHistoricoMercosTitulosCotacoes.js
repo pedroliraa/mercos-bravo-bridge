@@ -23,6 +23,7 @@ import mapItensParaCotacaoItemBravo from "../mappers/mapPedidoMercosToBravoCotac
 import { getCnpjByMercosClienteId } from "../services/clienteMongo.service.js";
 import { resolveSellerByMercosId } from "../services/sellerResolver.js";
 
+
 async function cargaHistorica() {
   try {
     logger.info("🚀 [CARGA] Iniciando carga histórica Mercos → CRM");
